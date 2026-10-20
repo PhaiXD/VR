@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: e756ebc16e473475aa8e40fe53f997d6
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 76647
+  packageName: bHaptics Haptic Plugin
+  packageVersion: 2.8.2
+  assetPath: Assets/Bhaptics/SDK2/Scripts/Core/Plugins/Apple/BhapticsAppleDevices.cs
+  uploadId: 1019518

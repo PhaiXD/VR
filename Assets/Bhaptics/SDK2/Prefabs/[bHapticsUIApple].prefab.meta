@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 08438a4a32046984fb0d79b0d82275e8
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 76647
+  packageName: bHaptics Haptic Plugin
+  packageVersion: 2.8.2
+  assetPath: Assets/Bhaptics/SDK2/Prefabs/[bHapticsUIApple].prefab
+  uploadId: 1019518

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 85fa8a6b7cd530fe3c31f5f8a14a0eed
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 76647
+  packageName: bHaptics Haptic Plugin
+  packageVersion: 2.8.2
+  assetPath: Assets/Bhaptics/SDK2/Scripts/Core/Plugins/Apple/BhapticsPlugin.xcframework.zip
+  uploadId: 1019518
