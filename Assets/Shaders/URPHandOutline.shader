@@ -30,8 +30,9 @@ Shader "UR3eVR/URPHandOutline"
             Tags { "LightMode" = "UniversalForward" }
 
             Blend SrcAlpha OneMinusSrcAlpha
-            ZWrite Off
-            Cull Off
+            ZWrite On
+            ZTest LEqual
+            Cull Back
 
             HLSLPROGRAM
             #pragma target 3.0

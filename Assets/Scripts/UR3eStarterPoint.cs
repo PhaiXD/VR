@@ -1,15 +1,14 @@
-using System;
+using System.Collections;
 using UnityEngine;
 
 namespace UR3eVR
 {
     /// <summary>
-    /// UR3eStarterPoint: แสดงจุด Starter Point / Home Point ของ UR3e ใน Unity VR Scene
+    /// UR3eStarterPoint: สร้างและจัดการ Starter Point / Home Point ของ UR3e ใน Unity VR Scene
     /// - พิกัด Safe Home ของ UR3e: X=0.3053m (305mm), Y=-0.1313m (-131mm), Z=0.3108m (311mm)
-    /// - แสดงเป็น Hologram ทรงกลมพร้อมวงแหวน Home Zone
-    /// - แกนพิกัด 3 มิติ หันหน้าไปในทิศทางพุ่งออกจากแว่น VR เสมอ (แดง=Forward ออกจากแว่น, เขียว=Left, น้ำเงิน=Up)
-    /// - มี Dynamic Guide Laser ชี้จากมือมายังจุด Starter Point พร้อมวัดระยะห่าง
-    /// - เมื่อกด Home หรือ Recenter จุด Starter Point จะกระโดดกลับมาอยู่ที่มือขวาทันที
+    /// - แสดงผลเป็น Hologram ทรงกลมและวงแหวนเลเซอร์ระนาบ 64 จุด
+    /// - มี UI ลอยตัวเตือนให้วางมือที่จุด Home ก่อนเริ่มควบคุมหุ่นยนต์
+    /// - เมื่อวางมือที่ Home วงแหวนและ Beacon จะเปลี่ยนเป็นสีเขียวสด (Emerald Green) เพื่อยืนยันการเชื่อมต่อ
     /// </summary>
     public class UR3eStarterPoint : MonoBehaviour
     {
@@ -37,12 +36,13 @@ namespace UR3eVR
 
         [Header("Home Zone Threshold")]
         [Tooltip("ระยะรัศมีสำหรับตรวจจับว่ามืออยู่ที่จุด Home (เมตร)")]
-        public float homeZoneRadius = 0.035f;
+        public float homeZoneRadius = 0.045f;
 
         [Header("Live Status (Read Only)")]
         public bool isAtHome = false;
         public float distanceToHome = 0f;
         public Vector3 homeRobotCoordinates = new Vector3(0.3053f, -0.1313f, 0.3108f);
+        public float engagedCelebrationTimer = 0f;
 
         // Visual elements
         private GameObject coreSphere;
@@ -51,13 +51,14 @@ namespace UR3eVR
         private GameObject labelObj;
         private TextMesh textMesh;
         private LineRenderer tetherLine;
+        private LineRenderer ringLine;
         private Material sphereMat;
         private Material ringMat;
         private Material lineMat;
 
-        private Color homeColor = new Color(0.0f, 1.0f, 0.55f, 0.85f);     // Vibrant Emerald Green
-        private Color awayColor = new Color(0.0f, 0.85f, 1.0f, 0.70f);     // Holographic Cyan
-        private Color pulseColor = new Color(1.0f, 0.9f, 0.0f, 0.85f);     // Warning / Approaching
+        private Color homeColor = new Color(0.0f, 1.0f, 0.55f, 0.95f);     // Vibrant Emerald Green
+        private Color awayColor = new Color(0.0f, 0.85f, 1.0f, 0.75f);     // Holographic Cyan
+        private Color pulseColor = new Color(1.0f, 0.85f, 0.1f, 0.90f);    // Prompt Yellow
 
         private void Awake()
         {
@@ -72,15 +73,6 @@ namespace UR3eVR
                 if (handTransform == null) handTransform = vrHandMover.handTransform;
                 if (headTransform == null) headTransform = vrHandMover.headTransform;
                 homeRobotCoordinates = vrHandMover.homeRobotPos;
-
-                if (vrHandMover.isAnchorSet)
-                {
-                    transform.position = vrHandMover.anchorHandWorldPos;
-                }
-                else if (handTransform != null)
-                {
-                    transform.position = handTransform.position;
-                }
             }
 
             if (headTransform == null && Camera.main != null)
@@ -88,14 +80,35 @@ namespace UR3eVR
                 headTransform = Camera.main.transform;
             }
 
-            if (headTransform != null)
+            // จัดวางตำแหน่งเริ่มต้นของ Home Point ตรงหน้าผู้ใช้ในระยะเอื้อมที่สะดวกสบาย
+            if (vrHandMover != null && vrHandMover.isAnchorSet)
             {
+                transform.position = vrHandMover.anchorHandWorldPos;
+                transform.rotation = vrHandMover.anchorHeadYaw;
+            }
+            else if (headTransform != null)
+            {
+                Vector3 fwd = Quaternion.Euler(0f, headTransform.eulerAngles.y, 0f) * Vector3.forward;
+                Vector3 right = Quaternion.Euler(0f, headTransform.eulerAngles.y, 0f) * Vector3.right;
+                transform.position = headTransform.position + fwd * 0.45f + right * 0.15f - Vector3.up * 0.18f;
                 transform.rotation = Quaternion.Euler(0f, headTransform.eulerAngles.y, 0f);
+            }
+            else if (handTransform != null)
+            {
+                transform.position = handTransform.position;
             }
         }
 
         /// <summary>
-        /// อัปเดตจุด Anchor ให้ตรงกับตำแหน่งมือขวาใน World Space ทันที
+        /// แจ้งเตือนเมื่อมือวางที่ Home สำเร็จและระบบสั่งเริ่มควบคุมหุ่นยนต์
+        /// </summary>
+        public void NotifyEngaged()
+        {
+            engagedCelebrationTimer = 2.5f;
+        }
+
+        /// <summary>
+        /// อัปเดตจุด Anchor ให้ตรงกับตำแหน่งมือขวาใน World Space
         /// </summary>
         public void UpdateAnchor(Vector3 worldPos, Quaternion headingRot, Vector3 robotPos)
         {
@@ -113,26 +126,47 @@ namespace UR3eVR
             }
             SetVisualsActive(true);
 
-            // แกนพิกัด Starter Point หันหน้าไปในทิศทางพุ่งออกจากแว่นเสมอ
-            if (headTransform != null)
+            if (engagedCelebrationTimer > 0f)
             {
-                transform.rotation = Quaternion.Euler(0f, headTransform.eulerAngles.y, 0f);
+                engagedCelebrationTimer -= Time.deltaTime;
             }
+
+            bool isEngaged = (vrHandMover != null && vrHandMover.isTrackingEngaged);
 
             // คำนวณระยะห่างระหว่างมือปัจจุบันกับจุด Starter Point (World Space ทั้งคู่)
             Vector3 currentHandPos = (handTransform != null) ? handTransform.position : transform.position;
             distanceToHome = Vector3.Distance(currentHandPos, transform.position);
             isAtHome = (distanceToHome <= homeZoneRadius);
 
-            // ปรับสีและเอฟเฟกต์การแสดงผล (Home vs Moving)
-            float pulse = 0.85f + 0.15f * Mathf.Sin(Time.time * 4f);
-            Color activeColor = isAtHome ? homeColor : Color.Lerp(awayColor, pulseColor, Mathf.Clamp01(distanceToHome / 0.35f));
+            // ปรับสีและเอฟเฟกต์การแสดงผล (Home vs Not Engaged vs Moving)
+            float pulse = 0.85f + 0.15f * Mathf.Sin(Time.time * (isEngaged ? 3.5f : 6.0f));
+            Color activeColor;
+            if (isAtHome)
+            {
+                activeColor = homeColor; // เขียวสดใสเมื่อมือวางอยู่ที่จุด Home
+            }
+            else if (isEngaged)
+            {
+                activeColor = Color.Lerp(awayColor, pulseColor, Mathf.Clamp01(distanceToHome / 0.35f));
+            }
+            else
+            {
+                activeColor = pulseColor; // สีเหลืองกระพริบเตือนให้วางมือก่อนเริ่ม
+            }
             activeColor.a *= pulse;
 
             if (sphereMat != null) sphereMat.color = activeColor;
-            if (ringMat != null) ringMat.color = isAtHome ? homeColor : awayColor;
+            Color ringC = isAtHome ? homeColor : (isEngaged ? awayColor : pulseColor);
+            if (ringMat != null) ringMat.color = ringC;
+            if (ringLine != null)
+            {
+                Color rc = ringC;
+                rc.a = 0.95f;
+                ringLine.startColor = rc;
+                ringLine.endColor = rc;
+            }
 
-            // อัปเดตเส้น Tether Laser นำทาง
+            // อัปเดตเส้น Tether Laser นำทางเชื่อมระหว่างมือกับจุด Home
             if (tetherLine != null)
             {
                 bool shouldShowLine = showTetherLine && (distanceToHome > 0.005f) && (handTransform != null);
@@ -141,7 +175,7 @@ namespace UR3eVR
                 {
                     tetherLine.SetPosition(0, transform.position);
                     tetherLine.SetPosition(1, currentHandPos);
-                    Color startC = isAtHome ? homeColor : awayColor;
+                    Color startC = isAtHome ? homeColor : (isEngaged ? awayColor : pulseColor);
                     Color endC = isAtHome ? homeColor : pulseColor;
                     tetherLine.startColor = startC;
                     tetherLine.endColor = endC;
@@ -160,19 +194,52 @@ namespace UR3eVR
                         labelObj.transform.rotation = Quaternion.LookRotation(lookDir);
                     }
 
-                    string statusStr = isAtHome 
-                        ? "<color=#00FF88>★ AT HOME (จุดเริ่มต้น) ★</color>" 
-                        : string.Format("<color=#00E5FF>ห่าง Home: {0:F1} cm</color>", distanceToHome * 100f);
+                    // แสดงผลข้อความเตือนให้วางมือที่จุด Home
+                    if (!isEngaged)
+                    {
+                        if (isAtHome)
+                        {
+                            float pct = Mathf.Clamp01((vrHandMover != null ? vrHandMover.currentDockTime : 0f) / Mathf.Max(0.01f, (vrHandMover != null ? vrHandMover.dockDwellTimeRequired : 0.35f)));
+                            textMesh.text = string.Format(
+                                "<size=36><b><color=#00FF88>★ DOCKED AT HOME! ★</color></b></size>\n" +
+                                "<size=26><color=#FFFFFF>กำลังเชื่อมต่อระบบควบคุม... [{0:P0}]</color></size>\n" +
+                                "<size=22><color=#00E5FF>กรุณาถือมือนิ่งไว้เพื่อเริ่ม</color></size>",
+                                pct
+                            );
+                        }
+                        else
+                        {
+                            textMesh.text = string.Format(
+                                "<size=36><b><color=#FFD54F>👉 กรุณาวางมือที่จุด Home เพื่อเริ่ม 👈</color></b></size>\n" +
+                                "<size=26><color=#FFFFFF>Place Right Hand at Home Point to Engage</color></size>\n" +
+                                "<size=24><color=#00E5FF>ระยะห่าง: {0:F1} cm  ▼  ▼  ▼</color></size>",
+                                distanceToHome * 100f
+                            );
+                        }
+                    }
+                    else if (engagedCelebrationTimer > 0f)
+                    {
+                        textMesh.text = 
+                            "<size=36><b><color=#00FF88>✅ ROBOT ENGAGED! READY! ✅</color></b></size>\n" +
+                            "<size=26><color=#FFFFFF>หุ่นยนต์เริ่มขยับตามมือแล้ว!</color></size>\n" +
+                            "<size=22><color=#00E5FF>ขยับมือเพื่อควบคุมการผสมสารเคมีได้ทันที</color></size>";
+                    }
+                    else
+                    {
+                        string statusStr = isAtHome 
+                            ? "<color=#00FF88>★ AT HOME (จุดเริ่มต้น) ★</color>" 
+                            : string.Format("<color=#00E5FF>ห่าง Home: {0:F1} cm | ควบคุมต่อเนื่อง</color>", distanceToHome * 100f);
 
-                    textMesh.text = string.Format(
-                        "<b>🏠 UR3e Starter Point (Home)</b>\n" +
-                        "Robot Home: [X:{0:F0}, Y:{1:F0}, Z:{2:F0}] mm\n" +
-                        "{3}",
-                        homeRobotCoordinates.x * 1000f,
-                        homeRobotCoordinates.y * 1000f,
-                        homeRobotCoordinates.z * 1000f,
-                        statusStr
-                    );
+                        textMesh.text = string.Format(
+                            "<b>VR-HaptiLab (Home Point)</b>\n" +
+                            "Robot Home: [X:{0:F0}, Y:{1:F0}, Z:{2:F0}] mm\n" +
+                            "{3}",
+                            homeRobotCoordinates.x * 1000f,
+                            homeRobotCoordinates.y * 1000f,
+                            homeRobotCoordinates.z * 1000f,
+                            statusStr
+                        );
+                    }
                 }
             }
 
@@ -194,9 +261,10 @@ namespace UR3eVR
 
         private void CreateVisuals()
         {
-            Shader shader = Shader.Find("Sprites/Default");
+            Shader shader = Shader.Find("UR3eVR/StereoUnlitColor");
             if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null) shader = Shader.Find("Unlit/Color");
+            if (shader == null) shader = Shader.Find("UR3eVR/URPHandOutline");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
 
             // 1. Central Hologram Sphere
             coreSphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -207,23 +275,33 @@ namespace UR3eVR
             DestroyCollider(coreSphere);
 
             sphereMat = new Material(shader) { color = awayColor };
+            sphereMat.enableInstancing = true;
             coreSphere.GetComponent<Renderer>().material = sphereMat;
 
-            // 2. Horizontal Home Zone Ring
-            ringVisual = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            ringVisual.name = "Home_ZoneRing";
+            // 2. Horizontal Home Zone Ring (Smooth 64-point circular laser ring)
+            ringVisual = new GameObject("Home_ZoneRing");
             ringVisual.transform.SetParent(transform, false);
-            ringVisual.transform.localPosition = new Vector3(0f, -0.005f, 0f);
-            ringVisual.transform.localScale = new Vector3(homeZoneRadius * 2f, 0.0015f, homeZoneRadius * 2f);
-            DestroyCollider(ringVisual);
+            ringVisual.transform.localPosition = new Vector3(0f, -0.003f, 0f);
+            ringVisual.transform.localRotation = Quaternion.identity;
 
-            ringMat = new Material(shader) { color = new Color(0f, 0.85f, 1f, 0.35f) };
-            ringVisual.GetComponent<Renderer>().material = ringMat;
+            ringLine = ringVisual.AddComponent<LineRenderer>();
+            ringLine.useWorldSpace = false;
+            ringLine.loop = true;
+            ringLine.startWidth = 0.003f;
+            ringLine.endWidth = 0.003f;
+            int ringSegments = 64;
+            ringLine.positionCount = ringSegments;
+            for (int i = 0; i < ringSegments; i++)
+            {
+                float angle = i * Mathf.PI * 2.0f / ringSegments;
+                ringLine.SetPosition(i, new Vector3(Mathf.Cos(angle) * homeZoneRadius, 0f, Mathf.Sin(angle) * homeZoneRadius));
+            }
+
+            ringMat = new Material(shader) { color = new Color(0f, 0.85f, 1f, 0.85f) };
+            ringMat.enableInstancing = true;
+            ringLine.material = ringMat;
 
             // 3. 3D Coordinate Frame (RGB Axes for Robot Motion)
-            // Robot +X Forward (Red)   -> Local Forward (+Z) หันพุ่งออกจากแว่น
-            // Robot +Y Left (Green)    -> Local Left (-X) หันไปทางซ้ายของแว่น
-            // Robot +Z Up (Blue)       -> Local Up (+Y) หันขึ้นบน
             axesRoot = new GameObject("Home_CoordinateAxes");
             axesRoot.transform.SetParent(transform, false);
             axesRoot.transform.localPosition = Vector3.zero;
@@ -242,6 +320,7 @@ namespace UR3eVR
             tetherLine.startWidth = 0.0035f;
             tetherLine.endWidth = 0.0015f;
             lineMat = new Material(shader);
+            lineMat.enableInstancing = true;
             tetherLine.material = lineMat;
             tetherLine.positionCount = 2;
             tetherLine.enabled = false;
@@ -249,7 +328,7 @@ namespace UR3eVR
             // 5. 3D Text Label
             labelObj = new GameObject("Home_Label");
             labelObj.transform.SetParent(transform, false);
-            labelObj.transform.localPosition = new Vector3(0f, markerScale * 0.75f + 0.045f, 0f);
+            labelObj.transform.localPosition = new Vector3(0f, markerScale * 0.75f + 0.055f, 0f);
 
             textMesh = labelObj.AddComponent<TextMesh>();
             textMesh.characterSize = 0.0028f;
@@ -258,7 +337,7 @@ namespace UR3eVR
             textMesh.alignment = TextAlignment.Center;
             textMesh.anchor = TextAnchor.MiddleCenter;
             textMesh.color = Color.white;
-            textMesh.text = "🏠 UR3e Starter Point (Home)";
+            textMesh.text = "VR-HaptiLab (Home Point)";
         }
 
         private void CreateAxisBranch(Transform parent, string name, Vector3 pos, Vector3 scale, Quaternion rot, Color col, Shader shader)
@@ -271,14 +350,15 @@ namespace UR3eVR
             cyl.transform.localScale = scale;
             DestroyCollider(cyl);
 
-            Material m = new Material(shader) { color = col };
-            cyl.GetComponent<Renderer>().material = m;
+            Material mat = new Material(shader) { color = col };
+            mat.enableInstancing = true;
+            cyl.GetComponent<Renderer>().material = mat;
         }
 
         private void DestroyCollider(GameObject go)
         {
-            Collider c = go.GetComponent<Collider>();
-            if (c != null) DestroyImmediate(c);
+            Collider col = go.GetComponent<Collider>();
+            if (col != null) DestroyImmediate(col);
         }
 
         private void OnDestroy()

@@ -1,4 +1,5 @@
-﻿using System;
+using System.Collections.Generic;
+using System;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -9,8 +10,29 @@ namespace UR3eVR
     /// <summary>
     /// GripperBridge: à¸ªà¹ˆà¸‡à¸„à¸³à¸ªà¸±à¹ˆà¸‡ GRIP à¹à¸¥à¸° MOVE (6-DOF) à¹„à¸›à¸¢à¸±à¸‡ Python vr_bridge_server.py à¸œà¹ˆà¸²à¸™ TCP
     /// </summary>
+        [System.Serializable]
+    public struct SystemAlert
+    {
+        public string Level;
+        public string Message;
+        public DateTime Timestamp;
+
+        public SystemAlert(string level, string message)
+        {
+            Level = level;
+            Message = message;
+            Timestamp = DateTime.Now;
+        }
+    }
+
     public class GripperBridge : MonoBehaviour
     {
+                public static event Action<string, string> OnAlertReceived;
+        public static event Action<string> OnLogReceived;
+        [System.NonSerialized] public List<SystemAlert> recentAlerts = new List<SystemAlert>();
+        private readonly Queue<SystemAlert> pendingAlertsQueue = new Queue<SystemAlert>();
+        private readonly object alertLock = new object();
+
         [Header("Network Settings")]
         [Tooltip("IP Address à¸‚à¸­à¸‡à¹€à¸„à¸£à¸·à¹ˆà¸­à¸‡à¸—à¸µà¹ˆà¸£à¸±à¸™ vr_bridge_server.py")]
         public string serverIp = "127.0.0.1";
@@ -62,6 +84,16 @@ namespace UR3eVR
         public Vector3 actualRobotPos = Vector3.zero;
         public Vector3 actualRobotRot = Vector3.zero; // Axis-Angle (rad)
         public bool hasReceivedRobotPose = false;
+
+        [Header("Safety Proximity Ratios (0.0=safe, 1.0=at boundary)")]
+        [Tooltip("Outer sphere proximity (0=center, 1=at max reach boundary)")]
+        [Range(0f, 1f)] public float safetyOuterRatio = 0f;
+        [Tooltip("Inner sphere proximity (0=far, 1=at self-collision boundary)")]
+        [Range(0f, 1f)] public float safetyInnerRatio = 0f;
+        [Tooltip("Cylinder proximity (0=far from Z-axis, 1=at singularity zone)")]
+        [Range(0f, 1f)] public float safetyCylinderRatio = 0f;
+        [Tooltip("Speed proximity (0=slow, 1=at max joint speed)")]
+        [Range(0f, 1f)] public float safetySpeedRatio = 0f;
 
         // Robot Arm Target Pose (6-DOF: Absolute / Anchor-based)
         private float targetPx = 0f;
@@ -123,7 +155,60 @@ namespace UR3eVR
 
         private void Update()
         {
-            if (pinchDetector != null && pinchDetector.isTracked)
+            // 1. Dispatch pending alerts received from network thread to main thread
+            lock (alertLock)
+            {
+                while (pendingAlertsQueue.Count > 0)
+                {
+                    var alert = pendingAlertsQueue.Dequeue();
+                    recentAlerts.Add(alert);
+                    if (recentAlerts.Count > 100) recentAlerts.RemoveAt(0);
+                    OnAlertReceived?.Invoke(alert.Level, alert.Message);
+                }
+            }
+
+            // 2. Read Gripper input: Touch Controller Index Trigger or Bare Hand Pinch
+            bool controllerActive = OVRInput.GetControllerPositionTracked(OVRInput.Controller.RTouch);
+            if (controllerActive)
+            {
+                float triggerVal = OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, OVRInput.Controller.RTouch);
+                int currentPos = Mathf.RoundToInt(triggerVal * 255f);
+
+                if (!isGripperLocked)
+                {
+                    if (Mathf.Abs(currentPos - lastSentPos) >= deadband)
+                    {
+                        SetTargetPos(currentPos);
+                    }
+
+                    // Auto-Tare when opening trigger fully (<= autoTareThreshold)
+                    if (currentPos >= 42)
+                    {
+                        rearmedForTare = true;
+                        isCalibratedAtOpen = false;
+                    }
+                    else if (rearmedForTare && currentPos <= autoTareThreshold)
+                    {
+                        rearmedForTare = false;
+                        isCalibratedAtOpen = true;
+                        RequestTare();
+                    }
+                }
+                else
+                {
+                    if (lastSentPos != lockedGripPos)
+                    {
+                        SetTargetPos(lockedGripPos);
+                    }
+                }
+
+                // Toggle Gripper Lock with 'A' Button (One) on Right Touch Controller
+                if (OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch))
+                {
+                    ToggleGripperLock();
+                }
+            }
+            else if (pinchDetector != null && pinchDetector.isTracked)
             {
                 if (!isGripperLocked)
                 {
@@ -133,22 +218,20 @@ namespace UR3eVR
                         SetTargetPos(currentPos);
                     }
 
-                    // Auto-Tare à¹€à¸¡à¸·à¹ˆà¸­à¸­à¹‰à¸²à¸™à¸´à¹‰à¸§à¸£à¸°à¸”à¸±à¸š <= 35 à¸ˆà¸²à¸ 255 (à¹€à¸«à¸¡à¸·à¸­à¸™à¸à¸” t)
-                if (currentPos >= 42)
-                {
-                    rearmedForTare = true;
-                    isCalibratedAtOpen = false;
-                }
-                else if (rearmedForTare && currentPos <= autoTareThreshold)
-                {
-                    rearmedForTare = false;
-                    isCalibratedAtOpen = true;
-                    RequestTare();
-                }
+                    if (currentPos >= 42)
+                    {
+                        rearmedForTare = true;
+                        isCalibratedAtOpen = false;
+                    }
+                    else if (rearmedForTare && currentPos <= autoTareThreshold)
+                    {
+                        rearmedForTare = false;
+                        isCalibratedAtOpen = true;
+                        RequestTare();
+                    }
                 }
                 else
                 {
-                    // Locked state: maintain locked level
                     if (lastSentPos != lockedGripPos)
                     {
                         SetTargetPos(lockedGripPos);
@@ -157,7 +240,7 @@ namespace UR3eVR
             }
         }
 
-                        public void SetTargetPos(int pos)
+        public void SetTargetPos(int pos)
         {
             lock (lockObj)
             {
@@ -462,14 +545,24 @@ namespace UR3eVR
                             int bytesRead = stream.Read(recvBuffer, 0, recvBuffer.Length);
                             if (bytesRead > 0)
                             {
-                                string msg = Encoding.ASCII.GetString(recvBuffer, 0, bytesRead).Trim();
+                                string msg = Encoding.UTF8.GetString(recvBuffer, 0, bytesRead).Trim();
                                 lastReceivedMessage = msg;
 
                                 // Parse STATUS <pos> <force>
                                 string[] lines = msg.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
                                 foreach (var line in lines)
                                 {
-                                    if (line.StartsWith("STATUS"))
+                                    if (line.StartsWith("ALERT"))
+                                    {
+                                        var alertParts = line.Split(new char[] { ' ' }, 3);
+                                        string level = alertParts.Length > 1 ? alertParts[1] : "WARNING";
+                                        string alertMsg = alertParts.Length > 2 ? alertParts[2] : "";
+                                        lock (alertLock)
+                                        {
+                                            pendingAlertsQueue.Enqueue(new SystemAlert(level, alertMsg));
+                                        }
+                                    }
+                                    else if (line.StartsWith("STATUS"))
                                     {
                                         var parts = line.Split(new char[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                                         if (parts.Length >= 3)
@@ -486,6 +579,14 @@ namespace UR3eVR
                                                 float.TryParse(parts[8], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out actualRobotRot.y);
                                                 float.TryParse(parts[9], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out actualRobotRot.z);
                                                 hasReceivedRobotPose = true;
+                                            // Parse safety proximity ratios (4 additional floats appended by Python)
+                                            if (parts.Length >= 14)
+                                            {
+                                                float.TryParse(parts[10], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetyOuterRatio);
+                                                float.TryParse(parts[11], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetyInnerRatio);
+                                                float.TryParse(parts[12], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetyCylinderRatio);
+                                                float.TryParse(parts[13], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetySpeedRatio);
+                                            }
                                             }
                                         }
                                     }

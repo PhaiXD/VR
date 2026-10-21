@@ -414,9 +414,10 @@ namespace UR3eVR
             menuRoot = new GameObject("LeftHand_ActionMenu");
             menuRoot.transform.SetParent(transform);
 
-            Shader unlitShader = Shader.Find("Universal Render Pipeline/Unlit");
+            Shader unlitShader = Shader.Find("UR3eVR/StereoUnlitColor");
+            if (unlitShader == null) unlitShader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (unlitShader == null) unlitShader = Shader.Find("UR3eVR/URPHandOutline");
             if (unlitShader == null) unlitShader = Shader.Find("Sprites/Default");
-            if (unlitShader == null) unlitShader = Shader.Find("Unlit/Color");
 
             // ==================== 1. ปุ่ม Home (ซ้าย) ====================
             homeButtonObj = new GameObject("Btn_Home");
@@ -479,6 +480,7 @@ namespace UR3eVR
             lr.startWidth = width;
             lr.endWidth = width;
             lr.material = new Material(sh);
+            lr.material.enableInstancing = true;
             lr.startColor = col;
             lr.endColor = col;
             for (int i = 0; i < SEGMENTS; i++)
@@ -496,6 +498,7 @@ namespace UR3eVR
             lr.startWidth = width;
             lr.endWidth = width;
             lr.material = new Material(sh);
+            lr.material.enableInstancing = true;
         }
 
         private void SetupTextMesh(TextMesh tm, string initialText)

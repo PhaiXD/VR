@@ -14,6 +14,7 @@ namespace UR3eVR
         public BhapticsGloveFeedback bhapticsFeedback;
         public VRHandMover vrHandMover;
         public UR3eStarterPoint starterPoint;
+        public SafetyBoundaryVisualizer safetyVisualizer;
         public script webcamScript;
 
         private GUIStyle headerStyle;
@@ -29,6 +30,7 @@ namespace UR3eVR
             if (bhapticsFeedback == null) bhapticsFeedback = FindAnyObjectByType<BhapticsGloveFeedback>();
             if (vrHandMover == null) vrHandMover = FindAnyObjectByType<VRHandMover>();
             if (starterPoint == null) starterPoint = FindAnyObjectByType<UR3eStarterPoint>();
+            if (safetyVisualizer == null) safetyVisualizer = FindAnyObjectByType<SafetyBoundaryVisualizer>();
             if (webcamScript == null) webcamScript = FindAnyObjectByType<script>();
         }
 
@@ -70,8 +72,25 @@ namespace UR3eVR
             InitStyles();
 
             GUILayout.BeginArea(new Rect(20, 20, 460, 710), GUI.skin.box);
-            GUILayout.Label("UR3e / Robotiq VR Hand Bridge", headerStyle);
+            GUILayout.Label("VR-HaptiLab | Hazardous Chemical Mixing", headerStyle);
             GUILayout.Space(2);
+
+            // Banner แจ้งเตือนสถานะการวางมือที่จุด Home
+            if (vrHandMover != null && !vrHandMover.isTrackingEngaged)
+            {
+                float dist = (starterPoint != null) ? starterPoint.distanceToHome * 100f : 0f;
+                GUI.color = new Color(1f, 0.85f, 0.2f);
+                GUILayout.Box(string.Format("👉 กรุณาวางมือที่จุด Home เพื่อเริ่มควบคุมหุ่นยนต์\n   (นำมือไปแตะที่วงแหวนสีฟ้า/เขียว | ห่าง {0:F1} cm)", dist), warningStyle);
+                GUI.color = Color.white;
+                GUILayout.Space(4);
+            }
+            else
+            {
+                GUI.color = new Color(0.2f, 1f, 0.5f);
+                GUILayout.Label("✅ ROBOT ENGAGED (หุ่นยนต์กำลังขยับตามมือแบบ Real-time)", labelStyle);
+                GUI.color = Color.white;
+                GUILayout.Space(2);
+            }
 
             // 1. HMD Status
             bool hmdPresent = OVRManager.isHmdPresent;
@@ -197,6 +216,13 @@ namespace UR3eVR
                     string homeDistStr = (starterPoint != null && starterPoint.isAtHome) ? "★ AT HOME (0.0 cm)" : (starterPoint != null ? string.Format("{0:F1} cm from Home", starterPoint.distanceToHome * 100f) : "Active");
                     GUI.color = (starterPoint != null && starterPoint.isAtHome) ? Color.green : Color.cyan;
                     GUILayout.Label(string.Format("Starter Point: {0} | Home: [305, -131, 311] mm", homeDistStr), subLabelStyle);
+                    if (safetyVisualizer == null) safetyVisualizer = FindAnyObjectByType<SafetyBoundaryVisualizer>();
+                    if (safetyVisualizer != null)
+                    {
+                        GUI.color = new Color(0f, 0.85f, 1f);
+                        GUILayout.Label(string.Format("Robot Base (0,0,0): {0:F1} cm | Barrier: {1:F0} cm", safetyVisualizer.distToBase * 100f, safetyVisualizer.outerRadius * 100f), subLabelStyle);
+                        GUI.color = Color.white;
+                    }
                     GUI.color = Color.white;
                     GUI.color = Color.white;
                     GUI.color = Color.white;
