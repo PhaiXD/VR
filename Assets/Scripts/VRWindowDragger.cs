@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,9 +7,13 @@ namespace UR3eVR
     /// <summary>
     /// VRWindowDragger: Allows repositioning World Space UI Windows ONLY with the Left Remote Controller.
     /// Right Hand is 100% reserved for UR3e robot teleoperation and will NEVER drag or interfere with UI!
+    /// Supports direct proximity hand grab AND remote laser pointer trigger grab.
+    /// Guaranteed single-window grab lock so only one UI can be dragged at a time.
     /// </summary>
     public class VRWindowDragger : MonoBehaviour
     {
+        public static VRWindowDragger ActiveDragger = null;
+
         [Header("Target Window")]
         public Transform windowTransform;
 
@@ -26,6 +30,7 @@ namespace UR3eVR
 
         public bool isGrabbed { get; private set; } = false;
         public bool isHovered { get; private set; } = false;
+        public bool isLaserGrabbed = false;
 
         private Transform grabberTransform;
         private Vector3 grabOffset;
@@ -69,7 +74,10 @@ namespace UR3eVR
 
             if (isGrabbed)
             {
-                UpdateDragging();
+                if (!isLaserGrabbed)
+                {
+                    UpdateDirectDragging();
+                }
             }
             else
             {
@@ -81,6 +89,13 @@ namespace UR3eVR
 
         private void CheckLeftRemoteNear()
         {
+            // Only allow grab if no other window is currently being dragged
+            if (ActiveDragger != null && ActiveDragger != this)
+            {
+                isHovered = false;
+                return;
+            }
+
             if (leftControllerAnchor == null)
             {
                 isHovered = false;
@@ -97,38 +112,38 @@ namespace UR3eVR
 
                 if (leftGrip)
                 {
-                    StartGrab(leftControllerAnchor);
+                    StartGrab(leftControllerAnchor, false);
                 }
             }
         }
 
-        public void ToggleDirectGrab(Transform grabber = null)
+        public void StartGrab(Transform grabber, bool viaLaser = false)
         {
-            if (isGrabbed) EndGrab();
-            else StartGrab(grabber != null ? grabber : leftControllerAnchor);
-        }
+            if (ActiveDragger != null && ActiveDragger != this) return;
+            ActiveDragger = this;
 
-        public void StartGrab(Transform grabber)
-        {
             if (grabber == null) grabber = leftControllerAnchor;
             if (grabber == null) return;
 
             isGrabbed = true;
+            isLaserGrabbed = viaLaser;
             grabberTransform = grabber;
-            grabOffset = windowTransform.position - grabber.position;
-            grabRotOffset = Quaternion.Inverse(grabber.rotation) * windowTransform.rotation;
+            if (windowTransform != null)
+            {
+                grabOffset = windowTransform.position - grabber.position;
+                grabRotOffset = Quaternion.Inverse(grabber.rotation) * windowTransform.rotation;
+            }
         }
 
-        private void UpdateDragging()
+        private void UpdateDirectDragging()
         {
-            if (grabberTransform == null)
+            if (ActiveDragger != this || grabberTransform == null || windowTransform == null)
             {
                 EndGrab();
                 return;
             }
 
             bool stillHolding = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.LTouch)
-                             || OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch)
                              || OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.LTouch) > 0.25f;
             try { stillHolding |= Input.GetMouseButton(0); } catch { }
 
@@ -139,7 +154,6 @@ namespace UR3eVR
             }
 
             Vector3 targetPos = grabberTransform.position + grabOffset;
-            Quaternion targetRot = grabberTransform.rotation * grabRotOffset;
 
             if (headTransform != null)
             {
@@ -147,17 +161,22 @@ namespace UR3eVR
                 toHead.y = 0;
                 if (toHead.sqrMagnitude > 0.01f)
                 {
-                    targetRot = Quaternion.LookRotation(-toHead.normalized, Vector3.up);
+                    Quaternion targetRot = Quaternion.LookRotation(-toHead.normalized, Vector3.up);
+                    windowTransform.rotation = Quaternion.Slerp(windowTransform.rotation, targetRot, Time.deltaTime * 20f);
                 }
             }
 
             windowTransform.position = Vector3.Lerp(windowTransform.position, targetPos, Time.deltaTime * 20f);
-            windowTransform.rotation = Quaternion.Slerp(windowTransform.rotation, targetRot, Time.deltaTime * 20f);
         }
 
         public void EndGrab()
         {
+            if (ActiveDragger == this)
+            {
+                ActiveDragger = null;
+            }
             isGrabbed = false;
+            isLaserGrabbed = false;
             grabberTransform = null;
         }
 

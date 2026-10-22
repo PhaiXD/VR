@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -64,7 +64,7 @@ namespace UR3eVR
         private void BuildStereoHUDCanvas()
         {
             hudCanvasObj = new GameObject("StereoHandDebugHUD_Canvas");
-            hudCanvasObj.transform.SetParent(transform, false);
+            hudCanvasObj.transform.SetParent(null, false);
 
             hudCanvas = hudCanvasObj.AddComponent<Canvas>();
             hudCanvas.renderMode = RenderMode.WorldSpace;

@@ -1,10 +1,11 @@
-Shader "UR3eVR/StereoUI"
+﻿Shader "UR3eVR/StereoUI"
 {
     Properties
     {
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
         [MainColor] _Color ("Tint", Color) = (1,1,1,1)
         _BaseColor ("Base Color", Color) = (1,1,1,1)
+        _TextureSampleAdd ("Texture Sample Add", Vector) = (0,0,0,0)
 
         _StencilComp ("Stencil Comparison", Float) = 8
         _Stencil ("Stencil ID", Float) = 0
@@ -84,7 +85,14 @@ Shader "UR3eVR/StereoUI"
                 float4 _BaseColor;
                 float4 _ClipRect;
                 float4 _MainTex_ST;
+                float4 _TextureSampleAdd;
             CBUFFER_END
+
+            inline float UnityGet2DClipping(in float2 position, in float4 clipRect)
+            {
+                float2 inside = step(clipRect.xy, position.xy) * step(position.xy, clipRect.zw);
+                return inside.x * inside.y;
+            }
 
             Varyings vert(Attributes input)
             {
@@ -95,7 +103,7 @@ Shader "UR3eVR/StereoUI"
 
                 output.worldPosition = input.positionOS;
                 output.positionCS = TransformWorldToHClip(TransformObjectToWorld(input.positionOS.xyz));
-                output.uv = input.uv;
+                output.uv = TRANSFORM_TEX(input.uv, _MainTex);
                 output.color = input.color * _Color * _BaseColor;
                 return output;
             }
@@ -105,7 +113,7 @@ Shader "UR3eVR/StereoUI"
                 UNITY_SETUP_INSTANCE_ID(input);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-                half4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv) * input.color;
+                half4 color = (SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv) + _TextureSampleAdd) * input.color;
 
                 #ifdef UNITY_UI_CLIP_RECT
                 color.a *= UnityGet2DClipping(input.worldPosition.xy, _ClipRect);
