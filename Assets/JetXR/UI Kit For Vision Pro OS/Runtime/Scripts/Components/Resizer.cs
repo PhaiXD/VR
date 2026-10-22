@@ -16,8 +16,8 @@ namespace JetXR.VisionUI
         private bool xrEnabled;
         private Vector3 defaultColliderSize;
 
-        private XRBaseInteractable interactable;
-        private XRBaseInteractor interactor;
+        private UnityEngine.XR.Interaction.Toolkit.Interactables.XRBaseInteractable interactable;
+        private UnityEngine.XR.Interaction.Toolkit.Interactors.XRBaseInteractor interactor;
         private BoxCollider boxCollider;
 
         private Vector3 scaleOnSelectEntered;
@@ -35,7 +35,7 @@ namespace JetXR.VisionUI
 
             boxCollider = GetComponent<BoxCollider>();
             defaultColliderSize = boxCollider.size;
-            interactable = GetComponent<XRBaseInteractable>();
+            interactable = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRBaseInteractable>();
             interactable.selectEntered.AddListener(OnSelectEntered);
             interactable.selectExited.AddListener(OnSelectExited);
         }
@@ -100,11 +100,11 @@ namespace JetXR.VisionUI
             if (!xrEnabled)
                 return;
 
-            interactor = eventData.interactorObject.transform.GetComponent<XRBaseInteractor>();
+            interactor = eventData.interactorObject.transform.GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactors.XRBaseInteractor>();
 
             scaleOnSelectEntered = objectToTransform.transform.localScale;
 
-            if ((interactor as XRRayInteractor).TryGetCurrent3DRaycastHit(out var hit))
+            if ((interactor as UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor).TryGetCurrent3DRaycastHit(out var hit))
             {
                 distanceOnSelectEntered = Vector3.Distance(objectToTransform.transform.position, hit.point);
             }
@@ -132,7 +132,7 @@ namespace JetXR.VisionUI
             if (!xrEnabled || interactable == null || !interactable.isSelected)
                 return;
 
-            if ((interactor as XRRayInteractor).TryGetCurrent3DRaycastHit(out var hit))
+            if ((interactor as UnityEngine.XR.Interaction.Toolkit.Interactors.XRRayInteractor).TryGetCurrent3DRaycastHit(out var hit))
             {
                 objectToTransform.transform.localScale = scaleOnSelectEntered * Vector3.Distance(objectToTransform.transform.position, hit.point) / distanceOnSelectEntered;
             }

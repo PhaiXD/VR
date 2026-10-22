@@ -161,6 +161,12 @@ namespace UR3eVR
             grabberTransform = null;
         }
 
+        public void SetHovered(bool hovered)
+        {
+            isHovered = hovered;
+            UpdateHandleVisual();
+        }
+
         private void UpdateHandleVisual()
         {
             if (handleImage == null) handleImage = GetComponent<Image>();

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using UnityEngine.XR.Interaction.Toolkit;
+
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -1203,7 +1203,7 @@ namespace JetXR.VisionUI
             itemLabelText.font = resources.fontMedium;
             itemLabelText.fontSize = 17;
             itemLabelText.overflowMode = TextOverflowModes.Ellipsis;
-            itemLabelText.enableWordWrapping = false;
+            itemLabelText.textWrappingMode = TextWrappingModes.NoWrap;
 
             RectTransform itemLabelRT = itemLabel.GetComponent<RectTransform>();
             itemLabelRT.anchorMin = Vector2.zero;
@@ -1340,7 +1340,7 @@ namespace JetXR.VisionUI
             labelText.font = resources.fontBold;
             labelText.fontSize = 22;
             labelText.overflowMode = TextOverflowModes.Ellipsis;
-            labelText.enableWordWrapping = false;
+            labelText.textWrappingMode = TextWrappingModes.NoWrap;
 
             RectTransform labelRT = label.GetComponent<RectTransform>();
             labelRT.anchorMin = new Vector2(0, 0);
@@ -1422,7 +1422,7 @@ namespace JetXR.VisionUI
             text.font = resources.fontMedium;
             text.fontSize = 12;
             text.overflowMode = TextOverflowModes.Ellipsis;
-            text.enableWordWrapping = false;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
             text.text = "Tooltip";
             text.raycastTarget = false;
 
@@ -1484,7 +1484,7 @@ namespace JetXR.VisionUI
             text.font = resources.fontRegular;
             text.fontSize = 17;
             text.overflowMode = TextOverflowModes.Ellipsis;
-            text.enableWordWrapping = false;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
 
             RectTransform textRectTransform = childText.GetComponent<RectTransform>();
             textRectTransform.anchorMin = Vector2.zero;
@@ -1503,7 +1503,7 @@ namespace JetXR.VisionUI
             placeholder.font = resources.fontMedium;
             placeholder.fontSize = 17;
             placeholder.overflowMode = TextOverflowModes.Ellipsis;
-            placeholder.enableWordWrapping = false;
+            placeholder.textWrappingMode = TextWrappingModes.NoWrap;
 
             RectTransform placeholderRectTransform = childPlaceholder.GetComponent<RectTransform>();
             placeholderRectTransform.anchorMin = Vector2.zero;
@@ -1686,7 +1686,7 @@ namespace JetXR.VisionUI
             titleTMP.font = resources.fontBold;
             titleTMP.fontSize = 19;
             titleTMP.overflowMode = TextOverflowModes.Ellipsis;
-            titleTMP.enableWordWrapping = false;
+            titleTMP.textWrappingMode = TextWrappingModes.NoWrap;
 
             RectTransform titleRect = title.GetComponent<RectTransform>();
             titleRect.sizeDelta = new Vector2(0, 24);
@@ -1801,7 +1801,7 @@ namespace JetXR.VisionUI
             textTMP.font = resources.fontSemibold;
             textTMP.fontSize = 17;
             textTMP.overflowMode = TextOverflowModes.Ellipsis;
-            textTMP.enableWordWrapping = false;
+            textTMP.textWrappingMode = TextWrappingModes.NoWrap;
 
             RectTransform textRect = text.GetComponent<RectTransform>();
             textRect.anchorMin = new Vector2(0, 0f);
@@ -2032,7 +2032,7 @@ namespace JetXR.VisionUI
             GameObject closeButton = CreateUIObject("Close Button", closeButtonWindow, typeof(Image));
             GameObject closeButtonAlphaBackground = CreateUIObject("Alpha Background", closeButtonWindow, typeof(Image));
             GameObject crossIcon = CreateUIObject("Cross Icon", closeButtonWindow, typeof(Image));
-            GameObject grabberObject = CreateUIObject("Grabber", grabberObjectWindow, typeof(Image), typeof(BoxCollider), typeof(XRSimpleInteractable), typeof(Grabber));
+            GameObject grabberObject = CreateUIObject("Grabber", grabberObjectWindow, typeof(Image), typeof(BoxCollider), typeof(UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable), typeof(Grabber));
             GameObject grabberAlphaBackground = CreateUIObject("Alpha Background", grabberObjectWindow, typeof(Image));
 
             // Animation
@@ -2398,7 +2398,7 @@ namespace JetXR.VisionUI
             GameObject positionPivot = CreateUIObject("Position Pivot", root, typeof(RectTransform));
             GameObject trailing = CreateUIObject("Trailing", positionPivot, typeof(Image));
             GameObject line = CreateUIObject("Line", root, typeof(Image));
-            GameObject interactable = CreateUIObject("Interactable", root, typeof(Image), typeof(Resizer), typeof(XRSimpleInteractable), typeof(BoxCollider));
+            GameObject interactable = CreateUIObject("Interactable", root, typeof(Image), typeof(Resizer), typeof(UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable), typeof(BoxCollider));
 
             // Position Pivot
             RectTransform positionPivotRect = positionPivot.GetComponent<RectTransform>();
@@ -2484,7 +2484,7 @@ namespace JetXR.VisionUI
             textMeshProUGUI.color = color;
             textMeshProUGUI.horizontalAlignment = horizontalAlignment;
             textMeshProUGUI.verticalAlignment = verticalAlignment;
-            textMeshProUGUI.enableWordWrapping = enableWordWrapping;
+            textMeshProUGUI.textWrappingMode = enableWordWrapping ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
             textMeshProUGUI.overflowMode = overflowMode;
         }
 

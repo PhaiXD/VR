@@ -418,7 +418,7 @@ namespace UR3eVR
 
             if (bhapticsFeedback != null)
             {
-                bhapticsFeedback.TriggerGripPulse(0.7f);
+                bhapticsFeedback.TriggerClickPulse(70, 60);
             }
 
             if (EventSystem.current != null)
