@@ -509,6 +509,20 @@ namespace UR3eVR
             tm.fontStyle = FontStyle.Bold;
             tm.color = Color.cyan;
             tm.text = initialText;
+
+            var mr = tm.GetComponent<MeshRenderer>();
+            if (mr != null)
+            {
+                Shader s = Shader.Find("UR3eVR/StereoTextShader");
+                if (s != null)
+                {
+                    Texture fTex = (tm.font != null && tm.font.material != null) ? tm.font.material.mainTexture : null;
+                    Material mat = new Material(s);
+                    if (fTex != null) mat.mainTexture = fTex;
+                    mat.enableInstancing = true;
+                    mr.material = mat;
+                }
+            }
         }
 
         private void UpdateMenuTransform()

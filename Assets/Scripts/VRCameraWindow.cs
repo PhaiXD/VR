@@ -52,6 +52,7 @@ namespace UR3eVR
 
         // Poke Debounce
         private float lastPokeTime = 0f;
+        private bool hasPositionedDefault = false;
         private List<Button> interactiveButtons = new List<Button>();
 
         private void Awake()
@@ -199,6 +200,14 @@ namespace UR3eVR
             videoRawImage = videoObj.AddComponent<RawImage>();
             videoRawImage.color = Color.white;
 
+            Shader stShader = Shader.Find("UR3eVR/StereoUITexture");
+            if (stShader != null)
+            {
+                Material vidMat = new Material(stShader);
+                vidMat.enableInstancing = true;
+                videoRawImage.material = vidMat;
+            }
+
             // Video Border Frame
             Outline vidOutline = videoObj.AddComponent<Outline>();
             vidOutline.effectColor = new Color(0.15f, 0.25f, 0.38f, 0.70f);
@@ -345,7 +354,14 @@ namespace UR3eVR
             try
             {
                 webcamTexture = new WebCamTexture(devName, 1280, 720, 30);
-                if (videoRawImage != null) videoRawImage.texture = webcamTexture;
+                if (videoRawImage != null)
+                {
+                    videoRawImage.texture = webcamTexture;
+                    if (videoRawImage.material != null)
+                    {
+                        videoRawImage.material.mainTexture = webcamTexture;
+                    }
+                }
                 webcamTexture.Play();
 
                 if (titleText != null) titleText.text = $"Camera [{currentCameraIndex + 1}/{availableDevices.Length}]";
@@ -379,6 +395,27 @@ namespace UR3eVR
         private void Update()
         {
             if (!isOpen) return;
+
+            // ตรวจสอบและผูก CenterEyeCamera กับ World Space Canvas ต่อเนื่อง (แก้ไขภาพไม่ขึ้นตาขวา)
+            if (canvas != null && (canvas.worldCamera == null || !canvas.worldCamera.gameObject.activeInHierarchy))
+            {
+                FindReferences();
+                if (centerEyeCamera != null)
+                {
+                    canvas.worldCamera = centerEyeCamera;
+                }
+            }
+
+            // จัดตำแหน่งลอยหน้าผู้ใช้เมื่อ VR Camera เริ่มทำงาน
+            if (!hasPositionedDefault)
+            {
+                FindReferences();
+                if (centerEyeCamera != null || Camera.main != null)
+                {
+                    RepositionWindowDefault();
+                    hasPositionedDefault = true;
+                }
+            }
 
             // Live Pulsing Green Dot
             if (liveDotImage != null && webcamTexture != null && webcamTexture.isPlaying)

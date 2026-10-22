@@ -1,3 +1,4 @@
+using UnityEngine.UI;
 using System.Collections;
 using UnityEngine;
 
@@ -78,7 +79,10 @@ namespace UR3eVR
         private GameObject baseCoreSphere;
         private GameObject baseRingObj;
         private GameObject baseLabelObj;
-        private TextMesh baseTextMesh;
+        private Canvas baseCanvas;
+        private Text baseLabelText;
+        private Image baseLabelBg;
+        private Camera centerEyeCamera;
         private LineRenderer baseRingLine;
         private LineRenderer baseToHomeLine;
         private Material baseMat;
@@ -98,6 +102,13 @@ namespace UR3eVR
             if (gripperBridge == null) gripperBridge = FindAnyObjectByType<GripperBridge>();
             if (handTransform == null && vrHandMover != null) handTransform = vrHandMover.handTransform;
             if (headTransform == null && vrHandMover != null) headTransform = vrHandMover.headTransform;
+            if (centerEyeCamera == null || !centerEyeCamera.gameObject.activeInHierarchy)
+            {
+                var cec = GameObject.Find("CenterEyeAnchor");
+                if (cec != null) centerEyeCamera = cec.GetComponent<Camera>();
+                if (centerEyeCamera == null && Camera.main != null) centerEyeCamera = Camera.main;
+            }
+            if (headTransform == null && centerEyeCamera != null) headTransform = centerEyeCamera.transform;
             if (headTransform == null && Camera.main != null) headTransform = Camera.main.transform;
         }
 
@@ -169,19 +180,45 @@ namespace UR3eVR
             baseToHomeLine.startColor = new Color(0f, 0.8f, 1f, 0.75f);
             baseToHomeLine.endColor = new Color(0f, 1f, 0.5f, 0.75f);
 
-            // 5. ป้ายข้อความ 3D Billboard ลอยเหนือฐาน
-            baseLabelObj = new GameObject("Base_Label");
+            // 5. ป้ายข้อความ World Space Canvas ลอยเหนือฐาน (Stereo Single Pass Instanced - เห็นทั้ง 2 ตา)
+            baseLabelObj = new GameObject("Base_Label_Canvas");
             baseLabelObj.transform.SetParent(baseMarkerRoot.transform, false);
             baseLabelObj.transform.localPosition = new Vector3(0f, 0.085f, 0f);
 
-            baseTextMesh = baseLabelObj.AddComponent<TextMesh>();
-            baseTextMesh.characterSize = 0.0025f;
-            baseTextMesh.fontSize = 40;
-            baseTextMesh.fontStyle = FontStyle.Bold;
-            baseTextMesh.alignment = TextAlignment.Center;
-            baseTextMesh.anchor = TextAnchor.MiddleCenter;
-            baseTextMesh.color = Color.white;
-            baseTextMesh.text = "<b><color=#00E5FF>🤖 UR3e Base (0, 0, 0)</color></b>\n<size=28><color=#90CAF9>Robot Origin Frame</color></size>";
+            baseCanvas = baseLabelObj.AddComponent<Canvas>();
+            baseCanvas.renderMode = RenderMode.WorldSpace;
+            if (centerEyeCamera != null) baseCanvas.worldCamera = centerEyeCamera;
+
+            var scaler = baseLabelObj.AddComponent<CanvasScaler>();
+            scaler.dynamicPixelsPerUnit = 10f;
+
+            RectTransform canvasRT = baseLabelObj.GetComponent<RectTransform>();
+            canvasRT.sizeDelta = new Vector2(360f, 130f);
+            canvasRT.localScale = Vector3.one * 0.0008f;
+
+            baseLabelBg = baseLabelObj.AddComponent<Image>();
+            baseLabelBg.color = new Color(0.06f, 0.08f, 0.12f, 0.88f);
+
+            var outline = baseLabelObj.AddComponent<Outline>();
+            outline.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.45f);
+            outline.effectDistance = new Vector2(1.5f, -1.5f);
+
+            GameObject textObj = new GameObject("BaseLabelText");
+            textObj.transform.SetParent(baseLabelObj.transform, false);
+            RectTransform textRT = textObj.AddComponent<RectTransform>();
+            textRT.anchorMin = Vector2.zero;
+            textRT.anchorMax = Vector2.one;
+            textRT.offsetMin = new Vector2(8f, 6f);
+            textRT.offsetMax = new Vector2(-8f, -6f);
+
+            baseLabelText = textObj.AddComponent<Text>();
+            baseLabelText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (baseLabelText.font == null) baseLabelText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            baseLabelText.fontSize = 20;
+            baseLabelText.alignment = TextAnchor.MiddleCenter;
+            baseLabelText.color = Color.white;
+            baseLabelText.supportRichText = true;
+            baseLabelText.text = "<b><color=#00E5FF>🤖 UR3e Base (0, 0, 0)</color></b>\n<size=15><color=#90CAF9>Robot Origin Frame</color></size>";
         }
 
         private void CreateBarrierSpheres()
@@ -278,6 +315,13 @@ namespace UR3eVR
                 {
                     baseMarkerRoot.transform.position = robotBaseWorldPos;
                     baseMarkerRoot.transform.rotation = headYaw;
+
+                    // ตรวจสอบและผูก CenterEyeCamera กับ World Space Canvas ต่อเนื่อง (แก้ไขภาพไม่ขึ้นตาขวา)
+                    if (baseCanvas != null && (baseCanvas.worldCamera == null || !baseCanvas.worldCamera.gameObject.activeInHierarchy))
+                    {
+                        FindReferences();
+                        if (centerEyeCamera != null) baseCanvas.worldCamera = centerEyeCamera;
+                    }
 
                     // ป้ายข้อความหันหน้าหาผู้ใช้เสมอ (Billboard)
                     if (baseLabelObj != null && headTransform != null)

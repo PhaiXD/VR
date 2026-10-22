@@ -71,23 +71,51 @@ namespace UR3eVR
         {
             InitStyles();
 
-            GUILayout.BeginArea(new Rect(20, 20, 460, 710), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(20, 20, 460, 740), GUI.skin.box);
             GUILayout.Label("VR-HaptiLab | Hazardous Chemical Mixing", headerStyle);
             GUILayout.Space(2);
 
-            // Banner แจ้งเตือนสถานะการวางมือที่จุด Home
+            // Left Remote Pause Status Banner
+            if (vrHandMover != null && vrHandMover.isTeleoperationPaused)
+            {
+                GUI.color = new Color(1f, 0.45f, 0.15f);
+                GUILayout.Box("⏸️ ROBOT TELEOPERATION PAUSED\n(Press [Y] on Left Controller to resume motion)", warningStyle);
+                GUI.color = Color.white;
+                GUILayout.Space(3);
+            }
+
+            // Joint Rotation Limit Warning / Deceleration Banner (100% ENGLISH)
+            if (gripperBridge != null && gripperBridge.safetyRotLimitRatio > 0.05f)
+            {
+                float degLeft = gripperBridge.safetyRotLimitDegLeft;
+                string jointName = gripperBridge.safetyRotLimitJointName;
+                bool isDanger = gripperBridge.safetyRotLimitRatio >= 0.70f;
+                int remainingSpeedPct = Mathf.RoundToInt(Mathf.Clamp01(1f - gripperBridge.safetyRotLimitRatio) * 100f);
+
+                GUI.color = isDanger ? new Color(1f, 0.25f, 0.25f) : new Color(1f, 0.75f, 0.15f);
+                string title = isDanger ? "🛑 ROTATION LIMIT REACHED" : "⚠️ ROTATION LIMIT WARNING";
+                string warningMsg = string.Format(
+                    "{0}\nJoint: {1} nearing full rotation limit ({2:F1}° remaining)\nDecelerating speed to {3}% to protect joints & cables.\n👉 Rotate wrist in the opposite direction to continue.",
+                    title, jointName, degLeft, remainingSpeedPct
+                );
+                GUILayout.Box(warningMsg, warningStyle);
+                GUI.color = Color.white;
+                GUILayout.Space(3);
+            }
+
+            // Home engagement status banner
             if (vrHandMover != null && !vrHandMover.isTrackingEngaged)
             {
                 float dist = (starterPoint != null) ? starterPoint.distanceToHome * 100f : 0f;
                 GUI.color = new Color(1f, 0.85f, 0.2f);
-                GUILayout.Box(string.Format("👉 กรุณาวางมือที่จุด Home เพื่อเริ่มควบคุมหุ่นยนต์\n   (นำมือไปแตะที่วงแหวนสีฟ้า/เขียว | ห่าง {0:F1} cm)", dist), warningStyle);
+                GUILayout.Box(string.Format("👉 Please place hand at Home point to engage robot control\n   (Touch the cyan/green circle | {0:F1} cm away)", dist), warningStyle);
                 GUI.color = Color.white;
                 GUILayout.Space(4);
             }
             else
             {
                 GUI.color = new Color(0.2f, 1f, 0.5f);
-                GUILayout.Label("✅ ROBOT ENGAGED (หุ่นยนต์กำลังขยับตามมือแบบ Real-time)", labelStyle);
+                GUILayout.Label("✅ ROBOT ENGAGED (Tracking hand in real-time)", labelStyle);
                 GUI.color = Color.white;
                 GUILayout.Space(2);
             }
@@ -149,22 +177,22 @@ namespace UR3eVR
                 }
                 else if (force < 45.0f)
                 {
-                    forceDesc = string.Format("{0:F1} N (Gentle Touch - บีบนิดเดียว)", force);
+                    forceDesc = string.Format("{0:F1} N (Gentle Touch - Light Grip)", force);
                     forceColor = Color.green;
                 }
                 else if (force < 95.0f)
                 {
-                    forceDesc = string.Format("{0:F1} N (Medium - บีบปานกลาง)", force);
+                    forceDesc = string.Format("{0:F1} N (Medium Grip)", force);
                     forceColor = Color.yellow;
                 }
                 else if (force < 165.0f)
                 {
-                    forceDesc = string.Format("{0:F1} N (Firm Grip - บีบแน่น)", force);
+                    forceDesc = string.Format("{0:F1} N (Firm Grip - Secure Hold)", force);
                     forceColor = new Color(1f, 0.5f, 0f); // Orange
                 }
                 else
                 {
-                    forceDesc = string.Format("{0:F1} N (Max Force - บีบแรงเต็มที่)", force);
+                    forceDesc = string.Format("{0:F1} N (Max Force - Full Clamp)", force);
                     forceColor = Color.red;
                 }
 
@@ -295,6 +323,10 @@ namespace UR3eVR
                 GUILayout.Label("Note: Put on Quest headset to wake Link & tracking", warningStyle);
             }
 
+            GUILayout.Space(4);
+            GUI.color = new Color(0.7f, 0.9f, 1f);
+            GUILayout.Label("🎮 Left Remote: [X] Set Origin/Home | [Y] Pause/Resume | [L-Stick] Auto-Shake (3x)", subLabelStyle);
+            GUI.color = Color.white;
             GUILayout.EndArea();
         }
     }

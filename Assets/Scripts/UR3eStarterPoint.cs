@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace UR3eVR
 {
@@ -7,6 +8,7 @@ namespace UR3eVR
     /// UR3eStarterPoint: สร้างและจัดการ Starter Point / Home Point ของ UR3e ใน Unity VR Scene
     /// - พิกัด Safe Home ของ UR3e: X=0.3053m (305mm), Y=-0.1313m (-131mm), Z=0.3108m (311mm)
     /// - แสดงผลเป็น Hologram ทรงกลมและวงแหวนเลเซอร์ระนาบ 64 จุด
+    /// - ป้ายแสดงพิกัดแบบ World Space Canvas คมชัดสไตล์ Meta Horizon OS เห็นได้ทั้งสองตา (Stereo SPI Support)
     /// - มี UI ลอยตัวเตือนให้วางมือที่จุด Home ก่อนเริ่มควบคุมหุ่นยนต์
     /// - เมื่อวางมือที่ Home วงแหวนและ Beacon จะเปลี่ยนเป็นสีเขียวสด (Emerald Green) เพื่อยืนยันการเชื่อมต่อ
     /// </summary>
@@ -49,7 +51,10 @@ namespace UR3eVR
         private GameObject ringVisual;
         private GameObject axesRoot;
         private GameObject labelObj;
-        private TextMesh textMesh;
+        private Canvas labelCanvas;
+        private Text labelText;
+        private Image labelBg;
+        private Camera centerEyeCamera;
         private LineRenderer tetherLine;
         private LineRenderer ringLine;
         private Material sphereMat;
@@ -67,6 +72,7 @@ namespace UR3eVR
 
         private void Start()
         {
+            FindCameras();
             if (vrHandMover == null) vrHandMover = FindAnyObjectByType<VRHandMover>();
             if (vrHandMover != null)
             {
@@ -96,6 +102,21 @@ namespace UR3eVR
             else if (handTransform != null)
             {
                 transform.position = handTransform.position;
+            }
+        }
+
+        private void FindCameras()
+        {
+            if (centerEyeCamera == null || !centerEyeCamera.gameObject.activeInHierarchy)
+            {
+                var cec = GameObject.Find("CenterEyeAnchor");
+                if (cec != null) centerEyeCamera = cec.GetComponent<Camera>();
+                if (centerEyeCamera == null && Camera.main != null) centerEyeCamera = Camera.main;
+            }
+
+            if (headTransform == null && centerEyeCamera != null)
+            {
+                headTransform = centerEyeCamera.transform;
             }
         }
 
@@ -155,9 +176,9 @@ namespace UR3eVR
             }
             activeColor.a *= pulse;
 
-            if (sphereMat != null) sphereMat.color = activeColor;
+            if (sphereMat != null) SetMaterialColor(sphereMat, activeColor);
             Color ringC = isAtHome ? homeColor : (isEngaged ? awayColor : pulseColor);
-            if (ringMat != null) ringMat.color = ringC;
+            if (ringMat != null) SetMaterialColor(ringMat, ringC);
             if (ringLine != null)
             {
                 Color rc = ringC;
@@ -182,8 +203,15 @@ namespace UR3eVR
                 }
             }
 
-            // อัปเดตป้ายข้อความ 3D Billboard
-            if (textMesh != null && labelObj != null)
+            // ตรวจสอบและผูก CenterEyeCamera กับ World Space Canvas ต่อเนื่อง (แก้ไขภาพไม่ขึ้นตาขวา)
+            if (labelCanvas != null && (labelCanvas.worldCamera == null || !labelCanvas.worldCamera.gameObject.activeInHierarchy))
+            {
+                FindCameras();
+                if (centerEyeCamera != null) labelCanvas.worldCamera = centerEyeCamera;
+            }
+
+            // อัปเดตป้ายข้อความ World Space Billboard
+            if (labelObj != null)
             {
                 labelObj.SetActive(showLabel);
                 if (showLabel && headTransform != null)
@@ -194,51 +222,54 @@ namespace UR3eVR
                         labelObj.transform.rotation = Quaternion.LookRotation(lookDir);
                     }
 
-                    // แสดงผลข้อความเตือนให้วางมือที่จุด Home
-                    if (!isEngaged)
+                    if (labelText != null)
                     {
-                        if (isAtHome)
+                        // แสดงผลข้อความเตือนให้วางมือที่จุด Home
+                        if (!isEngaged)
                         {
-                            float pct = Mathf.Clamp01((vrHandMover != null ? vrHandMover.currentDockTime : 0f) / Mathf.Max(0.01f, (vrHandMover != null ? vrHandMover.dockDwellTimeRequired : 0.35f)));
-                            textMesh.text = string.Format(
-                                "<size=36><b><color=#00FF88>★ DOCKED AT HOME! ★</color></b></size>\n" +
-                                "<size=26><color=#FFFFFF>กำลังเชื่อมต่อระบบควบคุม... [{0:P0}]</color></size>\n" +
-                                "<size=22><color=#00E5FF>กรุณาถือมือนิ่งไว้เพื่อเริ่ม</color></size>",
-                                pct
-                            );
+                            if (isAtHome)
+                            {
+                                float pct = Mathf.Clamp01((vrHandMover != null ? vrHandMover.currentDockTime : 0f) / Mathf.Max(0.01f, (vrHandMover != null ? vrHandMover.dockDwellTimeRequired : 0.35f)));
+                                labelText.text = string.Format(
+                                    "<size=22><b><color=#00FF88>★ DOCKED AT HOME! ★</color></b></size>\n" +
+                                    "<size=16><color=#FFFFFF>กำลังเชื่อมต่อระบบควบคุม... [{0:P0}]</color></size>\n" +
+                                    "<size=14><color=#00E5FF>กรุณาถือมือนิ่งไว้เพื่อเริ่ม</color></size>",
+                                    pct
+                                );
+                            }
+                            else
+                            {
+                                labelText.text = string.Format(
+                                    "<size=22><b><color=#FFD54F>👉 กรุณาวางมือที่จุด Home เพื่อเริ่ม 👈</color></b></size>\n" +
+                                    "<size=16><color=#FFFFFF>Place Right Hand at Home Point to Engage</color></size>\n" +
+                                    "<size=14><color=#00E5FF>ระยะห่าง: {0:F1} cm  ▼  ▼  ▼</color></size>",
+                                    distanceToHome * 100f
+                                );
+                            }
+                        }
+                        else if (engagedCelebrationTimer > 0f)
+                        {
+                            labelText.text = 
+                                "<size=22><b><color=#00FF88>✅ ROBOT ENGAGED! READY! ✅</color></b></size>\n" +
+                                "<size=16><color=#FFFFFF>หุ่นยนต์เริ่มขยับตามมือแล้ว!</color></size>\n" +
+                                "<size=14><color=#00E5FF>ขยับมือเพื่อควบคุมการผสมสารเคมีได้ทันที</color></size>";
                         }
                         else
                         {
-                            textMesh.text = string.Format(
-                                "<size=36><b><color=#FFD54F>👉 กรุณาวางมือที่จุด Home เพื่อเริ่ม 👈</color></b></size>\n" +
-                                "<size=26><color=#FFFFFF>Place Right Hand at Home Point to Engage</color></size>\n" +
-                                "<size=24><color=#00E5FF>ระยะห่าง: {0:F1} cm  ▼  ▼  ▼</color></size>",
-                                distanceToHome * 100f
+                            string statusStr = isAtHome 
+                                ? "<color=#00FF88>★ AT HOME (จุดเริ่มต้น) ★</color>" 
+                                : string.Format("<color=#00E5FF>ห่าง Home: {0:F1} cm | ควบคุมต่อเนื่อง</color>", distanceToHome * 100f);
+
+                            labelText.text = string.Format(
+                                "<size=18><b><color=#00E5FF>VR-HaptiLab (Home Point)</color></b></size>\n" +
+                                "<size=16><color=#FFFFFF>Robot Home: [X:{0:F0}, Y:{1:F0}, Z:{2:F0}] mm</color></size>\n" +
+                                "<size=14>{3}</size>",
+                                homeRobotCoordinates.x * 1000f,
+                                homeRobotCoordinates.y * 1000f,
+                                homeRobotCoordinates.z * 1000f,
+                                statusStr
                             );
                         }
-                    }
-                    else if (engagedCelebrationTimer > 0f)
-                    {
-                        textMesh.text = 
-                            "<size=36><b><color=#00FF88>✅ ROBOT ENGAGED! READY! ✅</color></b></size>\n" +
-                            "<size=26><color=#FFFFFF>หุ่นยนต์เริ่มขยับตามมือแล้ว!</color></size>\n" +
-                            "<size=22><color=#00E5FF>ขยับมือเพื่อควบคุมการผสมสารเคมีได้ทันที</color></size>";
-                    }
-                    else
-                    {
-                        string statusStr = isAtHome 
-                            ? "<color=#00FF88>★ AT HOME (จุดเริ่มต้น) ★</color>" 
-                            : string.Format("<color=#00E5FF>ห่าง Home: {0:F1} cm | ควบคุมต่อเนื่อง</color>", distanceToHome * 100f);
-
-                        textMesh.text = string.Format(
-                            "<b>VR-HaptiLab (Home Point)</b>\n" +
-                            "Robot Home: [X:{0:F0}, Y:{1:F0}, Z:{2:F0}] mm\n" +
-                            "{3}",
-                            homeRobotCoordinates.x * 1000f,
-                            homeRobotCoordinates.y * 1000f,
-                            homeRobotCoordinates.z * 1000f,
-                            statusStr
-                        );
                     }
                 }
             }
@@ -274,7 +305,8 @@ namespace UR3eVR
             coreSphere.transform.localScale = Vector3.one * markerScale;
             DestroyCollider(coreSphere);
 
-            sphereMat = new Material(shader) { color = awayColor };
+            sphereMat = new Material(shader);
+            SetMaterialColor(sphereMat, awayColor);
             sphereMat.enableInstancing = true;
             coreSphere.GetComponent<Renderer>().material = sphereMat;
 
@@ -297,7 +329,8 @@ namespace UR3eVR
                 ringLine.SetPosition(i, new Vector3(Mathf.Cos(angle) * homeZoneRadius, 0f, Mathf.Sin(angle) * homeZoneRadius));
             }
 
-            ringMat = new Material(shader) { color = new Color(0f, 0.85f, 1f, 0.85f) };
+            ringMat = new Material(shader);
+            SetMaterialColor(ringMat, new Color(0f, 0.85f, 1f, 0.85f));
             ringMat.enableInstancing = true;
             ringLine.material = ringMat;
 
@@ -325,19 +358,54 @@ namespace UR3eVR
             tetherLine.positionCount = 2;
             tetherLine.enabled = false;
 
-            // 5. 3D Text Label
-            labelObj = new GameObject("Home_Label");
+            // 5. World Space Canvas Label (Single Pass Instanced Stereo Ready - Both Eyes)
+            CreateStereoLabelCanvas();
+        }
+
+        private void CreateStereoLabelCanvas()
+        {
+            FindCameras();
+
+            labelObj = new GameObject("Home_Label_Canvas");
             labelObj.transform.SetParent(transform, false);
             labelObj.transform.localPosition = new Vector3(0f, markerScale * 0.75f + 0.055f, 0f);
 
-            textMesh = labelObj.AddComponent<TextMesh>();
-            textMesh.characterSize = 0.0028f;
-            textMesh.fontSize = 40;
-            textMesh.fontStyle = FontStyle.Bold;
-            textMesh.alignment = TextAlignment.Center;
-            textMesh.anchor = TextAnchor.MiddleCenter;
-            textMesh.color = Color.white;
-            textMesh.text = "VR-HaptiLab (Home Point)";
+            labelCanvas = labelObj.AddComponent<Canvas>();
+            labelCanvas.renderMode = RenderMode.WorldSpace;
+            if (centerEyeCamera != null) labelCanvas.worldCamera = centerEyeCamera;
+
+            var scaler = labelObj.AddComponent<CanvasScaler>();
+            scaler.dynamicPixelsPerUnit = 10f;
+
+            RectTransform canvasRT = labelObj.GetComponent<RectTransform>();
+            canvasRT.sizeDelta = new Vector2(460f, 150f);
+            canvasRT.localScale = Vector3.one * 0.00085f;
+
+            // Frosted Obsidian Background Card
+            labelBg = labelObj.AddComponent<Image>();
+            labelBg.color = new Color(0.06f, 0.08f, 0.12f, 0.88f);
+
+            var outline = labelObj.AddComponent<Outline>();
+            outline.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.45f);
+            outline.effectDistance = new Vector2(1.5f, -1.5f);
+
+            // Child Text Component
+            GameObject textObj = new GameObject("LabelText");
+            textObj.transform.SetParent(labelObj.transform, false);
+            RectTransform textRT = textObj.AddComponent<RectTransform>();
+            textRT.anchorMin = Vector2.zero;
+            textRT.anchorMax = Vector2.one;
+            textRT.offsetMin = new Vector2(10f, 8f);
+            textRT.offsetMax = new Vector2(-10f, -8f);
+
+            labelText = textObj.AddComponent<Text>();
+            labelText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (labelText.font == null) labelText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            labelText.fontSize = 18;
+            labelText.alignment = TextAnchor.MiddleCenter;
+            labelText.color = Color.white;
+            labelText.supportRichText = true;
+            labelText.text = "<b>VR-HaptiLab (Home Point)</b>";
         }
 
         private void CreateAxisBranch(Transform parent, string name, Vector3 pos, Vector3 scale, Quaternion rot, Color col, Shader shader)
@@ -350,9 +418,18 @@ namespace UR3eVR
             cyl.transform.localScale = scale;
             DestroyCollider(cyl);
 
-            Material mat = new Material(shader) { color = col };
+            Material mat = new Material(shader);
+            SetMaterialColor(mat, col);
             mat.enableInstancing = true;
             cyl.GetComponent<Renderer>().material = mat;
+        }
+
+        private void SetMaterialColor(Material mat, Color col)
+        {
+            if (mat == null) return;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", col);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", col);
+            mat.color = col;
         }
 
         private void DestroyCollider(GameObject go)

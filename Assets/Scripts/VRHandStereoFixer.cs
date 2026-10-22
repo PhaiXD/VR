@@ -26,6 +26,9 @@ namespace UR3eVR
         [Tooltip("Custom URP Hand Material (optional, will auto-create or use URP fallback if null)")]
         public Material urpHandMaterial;
 
+        private Camera centerEyeCamera;
+        private Material stereoTextMaterial;
+
         private void Awake()
         {
             EnsureMaterial();
@@ -38,6 +41,8 @@ namespace UR3eVR
             EnableControllerDrivenHandPoses();
             FixOVRMeshRenderers();
             ApplyStereoFix();
+            FixStereoWorldCanvasesAndText();
+            EnsureGripPoseAndLaserPointer();
         }
 
         private void Update()
@@ -45,11 +50,15 @@ namespace UR3eVR
             EnableControllerDrivenHandPoses();
             FixOVRMeshRenderers();
             ApplyStereoFix();
+            FixStereoWorldCanvasesAndText();
+            EnsureGripPoseAndLaserPointer();
         }
 
         private void LateUpdate()
         {
             ApplyStereoFix();
+            FixStereoWorldCanvasesAndText();
+            EnsureGripPoseAndLaserPointer();
         }
 
         private void EnableControllerDrivenHandPoses()
@@ -256,6 +265,97 @@ namespace UR3eVR
                             ovrRenderer.SetMaterial(mats[0]);
                         }
                     }
+                }
+            }
+        }
+        /// <summary>
+        /// ตรวจสอบและบังคับ Canvas ใน World Space ทุกตัวให้ผูกกับ CenterEyeCamera 
+        /// และอัปเกรด TextMesh ทุกตัวให้ใช้ StereoTextShader เพื่อให้มองเห็นได้ทั้ง 2 ตา
+        /// </summary>
+        public void FixStereoWorldCanvasesAndText()
+        {
+            if (centerEyeCamera == null || !centerEyeCamera.gameObject.activeInHierarchy)
+            {
+                var cec = GameObject.Find("CenterEyeAnchor");
+                if (cec != null) centerEyeCamera = cec.GetComponent<Camera>();
+                if (centerEyeCamera == null && Camera.main != null) centerEyeCamera = Camera.main;
+            }
+
+            if (centerEyeCamera != null)
+            {
+                var canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+                foreach (var c in canvases)
+                {
+                    if (c == null) continue;
+                    if (c.renderMode == RenderMode.WorldSpace)
+                    {
+                        if (c.worldCamera == null || !c.worldCamera.gameObject.activeInHierarchy)
+                        {
+                            c.worldCamera = centerEyeCamera;
+                        }
+                    }
+                }
+            }
+
+            if (stereoTextMaterial == null)
+            {
+                Shader s = Shader.Find("UR3eVR/StereoTextShader");
+                if (s != null)
+                {
+                    stereoTextMaterial = new Material(s);
+                    stereoTextMaterial.enableInstancing = true;
+                }
+            }
+
+            if (stereoTextMaterial != null)
+            {
+                var textMeshes = FindObjectsByType<TextMesh>(FindObjectsSortMode.None);
+                foreach (var tm in textMeshes)
+                {
+                    if (tm == null) continue;
+                    var mr = tm.GetComponent<MeshRenderer>();
+                    if (mr != null)
+                    {
+                        var sm = mr.sharedMaterial;
+                        if (sm == null || sm.shader == null || sm.shader.name != "UR3eVR/StereoTextShader")
+                        {
+                            Texture fTex = (tm.font != null && tm.font.material != null) ? tm.font.material.mainTexture : (sm != null ? sm.mainTexture : null);
+                            Material m = new Material(stereoTextMaterial);
+                            if (fTex != null) m.mainTexture = fTex;
+                            m.enableInstancing = true;
+                            mr.sharedMaterial = m;
+                        }
+                    }
+                }
+            }
+        }
+        /// <summary>
+        /// ตรวจสอบและติดตั้ง VRControllerGripPoseHandler บนมือทั้งสองข้าง
+        /// และติดตั้ง VRRemoteLaserPointer บน RightControllerAnchor โดยอัตโนมัติ
+        /// </summary>
+        public void EnsureGripPoseAndLaserPointer()
+        {
+            var hands = FindObjectsByType<OVRHand>(FindObjectsSortMode.None);
+            foreach (var h in hands)
+            {
+                if (h == null) continue;
+                if (h.GetComponent<VRControllerGripPoseHandler>() == null)
+                {
+                    var grip = h.gameObject.AddComponent<VRControllerGripPoseHandler>();
+                    grip.ovrHand = h;
+                    grip.ovrSkeleton = h.GetComponent<OVRSkeleton>();
+                }
+            }
+
+            if (VRRemoteLaserPointer.Instance == null)
+            {
+                var laser = FindAnyObjectByType<VRRemoteLaserPointer>();
+                if (laser == null)
+                {
+                    var rca = GameObject.Find("RightControllerAnchor");
+                    GameObject laserObj = new GameObject("VR_Remote_LaserPointer");
+                    if (rca != null) laserObj.transform.SetParent(rca.transform, false);
+                    laser = laserObj.AddComponent<VRRemoteLaserPointer>();
                 }
             }
         }

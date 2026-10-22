@@ -44,6 +44,18 @@ namespace UR3eVR
         [Tooltip("สถานะว่ากำลังใช้งาน Touch Controller หรือไม่")]
         public bool isUsingController = false;
 
+        [Header("Left Touch Controller Actions (รีโมทซ้าย)")]
+        [Tooltip("เปิดใช้งานการควบคุมผ่านปุ่มที่รีโมทด้านซ้าย (X: Set Origin/Home, Y: Pause/Resume, Thumbstick: Shake Test Tube)")]
+        public bool enableLeftControllerActions = true;
+
+        [Header("Teleoperation Pause State")]
+        [Tooltip("สถานะ Pause หยุดส่งพิกัดไปยังแขนกลชั่วคราว (กดปุ่ม Y บนรีโมทซ้ายเพื่อสลับ)")]
+        public bool isTeleoperationPaused = false;
+
+        [Header("Auto Shake Test Tube State")]
+        [Tooltip("สถานะกำลังเขย่าสารอัตโนมัติ (กดก้านโยก Thumbstick ซ้าย)")]
+        public bool isShakingActive = false;
+
         [Header("Target Pose and Anchor Settings")]
         [Range(0.2f, 3.0f)] public float posSensitivity = 0.50f;
         public Vector3 homeRobotPos = new Vector3(0.3053f, -0.1313f, 0.3108f);
@@ -277,6 +289,68 @@ namespace UR3eVR
         private void Update()
         {
             Transform activeTransform = GetActiveTrackingTransform();
+
+            // ========================================================
+            // LEFT TOUCH CONTROLLER ACTIONS (ปุ่มบนรีโมทซ้าย)
+            // ========================================================
+            if (enableLeftControllerActions)
+            {
+                // 1. ปุ่ม X (Button Three / RawButton.X / KeyCode.X): Set Origin Point & Robot Safe Home
+                bool xPressed = false;
+                try
+                {
+                    xPressed = OVRInput.GetDown(OVRInput.Button.Three, OVRInput.Controller.LTouch) ||
+                               OVRInput.GetDown(OVRInput.RawButton.X, OVRInput.Controller.LTouch) ||
+                               Input.GetKeyDown(KeyCode.X);
+                }
+                catch { }
+
+                if (xPressed)
+                {
+                    ExecuteSetOriginAndHome();
+                }
+
+                // 2. ปุ่ม Y (Button Four / RawButton.Y / KeyCode.Y): Pause / Resume Teleoperation
+                bool yPressed = false;
+                try
+                {
+                    yPressed = OVRInput.GetDown(OVRInput.Button.Four, OVRInput.Controller.LTouch) ||
+                               OVRInput.GetDown(OVRInput.RawButton.Y, OVRInput.Controller.LTouch) ||
+                               Input.GetKeyDown(KeyCode.Y);
+                }
+                catch { }
+
+                if (yPressed)
+                {
+                    ToggleTeleoperationPause();
+                }
+
+                // 3. ปุ่มกดตรง Joy Stick ที่เลื่อน (Thumbstick Click / KeyCode.K): เขย่าสารอัตโนมัติ 3 รอบ
+                bool thumbstickPressed = false;
+                try
+                {
+                    thumbstickPressed = OVRInput.GetDown(OVRInput.Button.PrimaryThumbstick, OVRInput.Controller.LTouch) ||
+                                         OVRInput.GetDown(OVRInput.RawButton.LThumbstick, OVRInput.Controller.LTouch) ||
+                                         Input.GetKeyDown(KeyCode.K);
+                }
+                catch { }
+
+                if (thumbstickPressed)
+                {
+                    ExecuteAutoShake();
+                }
+            }
+
+            // หากอยู่ในสถานะ Pause: หยุดส่งพิกัดไปยังแขนกลทันที
+            if (isTeleoperationPaused)
+            {
+                if (gripperBridge != null)
+                {
+                    gripperBridge.SetTargetVelocity(0f, 0f, 0f, 0f, 0f, 0f);
+                }
+                return;
+            }
+
 
             if (isUsingController)
             {
@@ -598,6 +672,119 @@ namespace UR3eVR
             smoothedVel = Vector3.zero;
             mappedAngularVelocity = Vector3.zero;
             smoothedRotVel = Vector3.zero;
+        }
+    
+        /// <summary>
+        /// ปุ่ม X: Set origin point (ทั้ง center point ใน unity และ home ของแขนกล)
+        /// </summary>
+        public void ExecuteSetOriginAndHome()
+        {
+            RecenterAnchor();
+            if (gripperBridge != null)
+            {
+                gripperBridge.RequestHome();
+            }
+            if (isTeleoperationPaused)
+            {
+                isTeleoperationPaused = false;
+            }
+            TriggerLeftControllerHaptic(0.6f, 0.15f);
+            Debug.Log("[VRHandMover] [Button X] Set Origin Point (Center Point & Safe Home) executed!");
+        }
+
+        /// <summary>
+        /// ปุ่ม Y: Pause / Resume การเคลื่อนไหวแขนกล (หยุดส่งพิกัด / กลับมาเคลื่อนไหวตาม)
+        /// </summary>
+        public void ToggleTeleoperationPause()
+        {
+            isTeleoperationPaused = !isTeleoperationPaused;
+            if (isTeleoperationPaused)
+            {
+                if (gripperBridge != null)
+                {
+                    gripperBridge.SetTargetVelocity(0f, 0f, 0f, 0f, 0f, 0f);
+                }
+                TriggerLeftControllerHaptic(0.4f, 0.12f);
+                Debug.Log("[VRHandMover] [Button Y] ⏸️ ROBOT TELEOPERATION PAUSED");
+            }
+            else
+            {
+                SyncAnchorOnResume();
+                TriggerLeftControllerHaptic(0.8f, 0.18f);
+                Debug.Log("[VRHandMover] [Button Y] ▶️ ROBOT TELEOPERATION RESUMED");
+            }
+        }
+
+        /// <summary>
+        /// ซิงค์ Anchor ใหม่เมื่อ Unpause เพื่อไม่ให้แขนกลกระตุกหรือพุ่งตามมือ (Zero Jerk Resume)
+        /// </summary>
+        public void SyncAnchorOnResume()
+        {
+            Transform activeTransform = GetActiveTrackingTransform();
+            if (activeTransform == null) return;
+
+            anchorHandWorldPos = activeTransform.position;
+            if (useHeadsetOrientation && headTransform != null)
+            {
+                anchorHeadYaw = Quaternion.Euler(0f, headTransform.eulerAngles.y, 0f);
+            }
+            anchorHandRot = Quaternion.Inverse(anchorHeadYaw) * activeTransform.rotation;
+
+            if (hasReceivedRobotPose)
+            {
+                anchorRobotPos = actualRobotPos;
+                anchorRobotRot = actualRobotRot;
+                currentTargetPos = actualRobotPos;
+                currentTargetRotAxisAngle = actualRobotRot;
+            }
+            else
+            {
+                anchorRobotPos = homeRobotPos;
+                anchorRobotRot = homeRobotRotAxisAngle;
+                currentTargetPos = homeRobotPos;
+                currentTargetRotAxisAngle = homeRobotRotAxisAngle;
+            }
+
+            posFilter.Reset();
+            rotFilter.Reset();
+            hasPrevState = false;
+
+            if (starterPoint != null)
+            {
+                starterPoint.UpdateAnchor(anchorHandWorldPos, anchorHeadYaw, anchorRobotPos);
+            }
+        }
+
+        /// <summary>
+        /// ปุ่มกดตรง Joy Stick: เขย่าสารอัตโนมัติ 3 รอบ (คว่ำ 180° และหงายกลับ -180°)
+        /// </summary>
+        public void ExecuteAutoShake()
+        {
+            if (gripperBridge != null)
+            {
+                gripperBridge.RequestShake();
+            }
+            TriggerLeftControllerHaptic(0.7f, 0.25f);
+            Debug.Log("[VRHandMover] [Thumbstick Click] 🧪 Automated Test Tube Shake (3 cycles) requested!");
+        }
+
+        /// <summary>
+        /// ส่ง Haptic สั่นยืนยันที่รีโมทซ้าย
+        /// </summary>
+        public void TriggerLeftControllerHaptic(float amplitude, float duration)
+        {
+            try
+            {
+                StartCoroutine(LeftControllerHapticRoutine(amplitude, duration));
+            }
+            catch { }
+        }
+
+        private System.Collections.IEnumerator LeftControllerHapticRoutine(float amplitude, float duration)
+        {
+            try { OVRInput.SetControllerVibration(amplitude, amplitude, OVRInput.Controller.LTouch); } catch { }
+            yield return new WaitForSeconds(duration);
+            try { OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.LTouch); } catch { }
         }
     }
 }

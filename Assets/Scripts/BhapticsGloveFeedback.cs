@@ -142,6 +142,11 @@ namespace UR3eVR
         [Tooltip("เปิดระบบสั่นเป็นจังหวะชีพจร (Rhythmic Pulse 4 Hz) ในโซนเหลือง")]
         public bool enableYellowPulsing = true;
 
+        [Header("Joint Rotation Limit Warning (Wrist Motor #5)")]
+        [Tooltip("เปิดใช้งานการสั่นเตือนที่ข้อมือเมื่อหมุนใกล้ครบรอบ/สุดขีดจำกัด (Rotation Limit Warning)")]
+        public bool enableRotationLimitWristWarning = true;
+        public bool isNearRotationLimitStatus = false;
+
         [Header("Haptic Timing")]
         [Tooltip("ระยะเวลาการสั่นต่อรอบ (ms)")]
         [Range(50, 250)]
@@ -471,6 +476,13 @@ namespace UR3eVR
                 }
             }
 
+            // 2b. ตรวจสอบ Joint Rotation Limit (เมื่อหมุนใกล้ครบรอบ จาก Python gripperBridge)
+            if (gripperBridge != null && gripperBridge.safetyRotLimitRatio > 0.0f)
+            {
+                float rotRatio = Mathf.Clamp01(gripperBridge.safetyRotLimitRatio);
+                maxRatio = Mathf.Max(maxRatio, rotRatio);
+            }
+
             // 3. ตรวจสอบระยะ Slow Zone จาก VRHandMover
             if (vrHandMover != null && vrHandMover.isAnchorSet)
             {
@@ -525,6 +537,40 @@ namespace UR3eVR
                     }
                 }
             }
+
+            // ตรวจสอบแรงสั่นเตือนข้อมือจากการหมุนใกล้ครบรอบโดยเฉพาะ (ยิ่งหมุนต่อ ยิ่งสั่นเตือนที่ข้อมือแรงขึ้น)
+            int rotWristIntensity = 0;
+            if (enableRotationLimitWristWarning && enableBoundaryWristWarning && gripperBridge != null && gripperBridge.safetyRotLimitRatio > 0.05f)
+            {
+                isNearRotationLimitStatus = true;
+                float tRot = Mathf.Clamp01((gripperBridge.safetyRotLimitRatio - 0.05f) / 0.95f);
+                int baseRotInt = Mathf.RoundToInt(Mathf.Lerp(minWristWarningIntensity, maxWristWarningIntensity, tRot));
+                if (gripperBridge.safetyRotLimitRatio >= redDangerThreshold)
+                {
+                    // 🔴 หมุนใกล้ครบรอบมาก (< 10° เหลือ): สั่นเตือนฉุกเฉินถี่และแรง (Urgent Buzz 22 Hz)
+                    float rapidPulse = (Mathf.Sin(Time.time * 22f * Mathf.PI) > -0.2f) ? 1.0f : 0.70f;
+                    rotWristIntensity = Mathf.RoundToInt(baseRotInt * rapidPulse);
+                }
+                else
+                {
+                    // 🟡 เริ่มเข้าสู่โซนเตือน 10°-30°: สั่นชีพจรเตือนเป็นจังหวะ (Rhythmic Pulse 5 Hz)
+                    if (enableYellowPulsing)
+                    {
+                        bool pulseOn = Mathf.Sin(Time.time * 10f * Mathf.PI) > 0.05f;
+                        rotWristIntensity = pulseOn ? baseRotInt : 0;
+                    }
+                    else
+                    {
+                        rotWristIntensity = baseRotInt;
+                    }
+                }
+            }
+            else
+            {
+                isNearRotationLimitStatus = false;
+            }
+
+            targetWristIntensity = Mathf.Max(targetWristIntensity, rotWristIntensity);
 
             // Smooth Envelope สำหรับมอเตอร์ข้อมือ
             if (targetWristIntensity > currentSmoothedWristIntensity)
@@ -603,6 +649,21 @@ namespace UR3eVR
             {
                 Debug.LogWarning("[BhapticsGloveFeedback] PlayMotors error: " + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// สั่นสะเทือนแบบจังหวะสั้น (Haptic Click Pulse) ที่นิ้วชี้และข้อมือเพื่อยืนยันการกดปุ่ม UI
+        /// </summary>
+        public void TriggerClickPulse(int intensity = 60, int durationMs = 60)
+        {
+            try
+            {
+                int[] clickMotors = new int[8];
+                clickMotors[1] = intensity; // นิ้วชี้
+                clickMotors[5] = intensity; // ข้อมือ
+                BhapticsLibrary.PlayMotors((int)glovePosition, clickMotors, durationMs);
+            }
+            catch { }
         }
 
         private void StopGloveHaptic()

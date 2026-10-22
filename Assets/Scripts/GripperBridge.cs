@@ -95,6 +95,26 @@ namespace UR3eVR
         [Tooltip("Speed proximity (0=slow, 1=at max joint speed)")]
         [Range(0f, 1f)] public float safetySpeedRatio = 0f;
 
+        [Header("Joint Rotation Limit Proximity (Near Full Turn / Max Limit)")]
+        [Tooltip("Joint rotation limit proximity (0=safe, 1=at rotation limit)")]
+        [Range(0f, 1f)] public float safetyRotLimitRatio = 0f;
+        public int safetyRotLimitJointIdx = 5;
+        public float safetyRotLimitDegLeft = 999f;
+
+        public static readonly string[] JointNames = new string[] {
+            "Base (J1)", "Shoulder (J2)", "Elbow (J3)", "Wrist 1 (J4)", "Wrist 2 (J5)", "Wrist 3 (J6)"
+        };
+
+        public string safetyRotLimitJointName
+        {
+            get
+            {
+                if (safetyRotLimitJointIdx >= 0 && safetyRotLimitJointIdx < JointNames.Length)
+                    return JointNames[safetyRotLimitJointIdx];
+                return "Wrist 3 (J6)";
+            }
+        }
+
         // Robot Arm Target Pose (6-DOF: Absolute / Anchor-based)
         private float targetPx = 0f;
         private float targetPy = 0f;
@@ -112,6 +132,7 @@ namespace UR3eVR
         private bool rearmedForTare = false;
         private bool tareRequested = false;
         private bool homeRequested = false;
+        private bool shakeRequested = false;
 
         // Internal
         private Thread networkThread;
@@ -295,6 +316,15 @@ namespace UR3eVR
             Debug.Log("[GripperBridge] ðŸ  RequestHome: Sending HOME command to UR3e robot...");
         }
 
+        public void RequestShake()
+        {
+            lock (lockObj)
+            {
+                shakeRequested = true;
+            }
+            Debug.Log("[GripperBridge] RequestShake: Sending SHAKE command to UR3e robot...");
+        }
+
         /// <summary>
         /// à¸£à¸±à¸šà¸„à¸§à¸²à¸¡à¹€à¸£à¹‡à¸§ 6-DOF à¸ˆà¸²à¸ VRHandMover à¹à¸¥à¹‰à¸§à¸ªà¹ˆà¸‡à¹„à¸› Python à¹€à¸›à¹‡à¸™à¸„à¸³à¸ªà¸±à¹ˆà¸‡ MOVE
         /// </summary>
@@ -453,6 +483,23 @@ namespace UR3eVR
                             stream.Flush();
                         }
 
+                        // Send SHAKE command to UR3e robot for automatic tube mixing
+                        bool shouldShake = false;
+                        lock (lockObj)
+                        {
+                            if (shakeRequested)
+                            {
+                                shouldShake = true;
+                                shakeRequested = false;
+                            }
+                        }
+                        if (shouldShake)
+                        {
+                            byte[] shakeBytes = Encoding.ASCII.GetBytes("SHAKE\n");
+                            stream.Write(shakeBytes, 0, shakeBytes.Length);
+                            stream.Flush();
+                        }
+
                         // à¸ªà¹ˆà¸‡ POSE 6-DOF Target Pose à¸ˆà¸²à¸ VR Hand â†’ Python à¹€à¸‰à¸žà¸²à¸°à¹€à¸¡à¸·à¹ˆà¸­à¸¡à¸µ "à¸à¸²à¸£à¹€à¸„à¸¥à¸·à¹ˆà¸­à¸™à¸—à¸µà¹ˆà¸—à¸µà¹ˆà¸¡à¸µà¸™à¸±à¸¢à¸ªà¸³à¸„à¸±à¸" (Significant Change)
                         float sendPx = 0f, sendPy = 0f, sendPz = 0f;
                         float sendPrx = 0f, sendPry = 0f, sendPrz = 0f;
@@ -579,13 +626,25 @@ namespace UR3eVR
                                                 float.TryParse(parts[8], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out actualRobotRot.y);
                                                 float.TryParse(parts[9], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out actualRobotRot.z);
                                                 hasReceivedRobotPose = true;
-                                            // Parse safety proximity ratios (4 additional floats appended by Python)
+                                            // Parse safety proximity ratios (additional floats appended by Python)
                                             if (parts.Length >= 14)
                                             {
                                                 float.TryParse(parts[10], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetyOuterRatio);
                                                 float.TryParse(parts[11], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetyInnerRatio);
                                                 float.TryParse(parts[12], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetyCylinderRatio);
                                                 float.TryParse(parts[13], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetySpeedRatio);
+                                            }
+                                            if (parts.Length >= 15)
+                                            {
+                                                float.TryParse(parts[14], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetyRotLimitRatio);
+                                            }
+                                            if (parts.Length >= 16)
+                                            {
+                                                int.TryParse(parts[15], out safetyRotLimitJointIdx);
+                                            }
+                                            if (parts.Length >= 17)
+                                            {
+                                                float.TryParse(parts[16], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out safetyRotLimitDegLeft);
                                             }
                                             }
                                         }

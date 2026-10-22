@@ -7,6 +7,14 @@ using UnityEngine.EventSystems;
 
 namespace UR3eVR
 {
+    [System.Serializable]
+    public class SkyboxOption
+    {
+        public string displayName;
+        public string category;
+        public Material skyboxMaterial;
+    }
+
     /// <summary>
     /// VRMenuManager: ระบบ Quick Menu ลอยในพื้นที่ 3D สำหรับ Meta Quest Touch Remote
     /// - ปุ่ม Menu รีโมทมือซ้าย (3 ขีด / Hamburger): OVRInput.Button.Start / KeyCode.M
@@ -39,6 +47,15 @@ namespace UR3eVR
         public bool isMenuOpen = false;
         public enum MenuPanel { Main, Camera, Log, Background }
         public MenuPanel currentPanel = MenuPanel.Main;
+
+        [Header("Skybox & Environment Options")]
+        public List<SkyboxOption> skyboxOptions = new List<SkyboxOption>();
+        public int currentBgPage = 0;
+        public string currentActiveSkyboxName = "Solid Black (#000000)";
+        private Text activeBgStatusText;
+        private GameObject bgGridContainer;
+        private Text bgPageIndicatorText;
+        private List<GameObject> activePageButtons = new List<GameObject>();
 
         [Header("Laser Pointer Settings")]
         public bool enableLaserPointer = true;
@@ -105,6 +122,8 @@ namespace UR3eVR
             FindReferences();
             LoadFont();
             EnsureStereoMaterials();
+            InitSkyboxes();
+            LoadSavedSkyboxPreference();
             BuildVRCanvas();
             BuildLaserPointer();
 
@@ -332,7 +351,14 @@ namespace UR3eVR
             if (panelMain != null) panelMain.SetActive(panel == MenuPanel.Main);
             if (panelCamera != null) panelCamera.SetActive(panel == MenuPanel.Camera);
             if (panelLog != null) panelLog.SetActive(panel == MenuPanel.Log);
-            if (panelBg != null) panelBg.SetActive(panel == MenuPanel.Background);
+            if (panelBg != null)
+            {
+                panelBg.SetActive(panel == MenuPanel.Background);
+                if (panel == MenuPanel.Background)
+                {
+                    RefreshBgPageButtons();
+                }
+            }
 
             if (panel == MenuPanel.Camera)
             {
@@ -647,6 +673,13 @@ namespace UR3eVR
 
         private void UpdateLaserPointer()
         {
+            if (VRRemoteLaserPointer.Instance != null)
+            {
+                if (laserLine != null) laserLine.enabled = false;
+                if (reticleObj != null) reticleObj.SetActive(false);
+                return;
+            }
+
             if (!enableLaserPointer || !isMenuOpen || canvasObj == null)
             {
                 if (laserLine != null) laserLine.enabled = false;
@@ -1077,36 +1110,350 @@ namespace UR3eVR
                 new Color(0.18f, 0.22f, 0.32f, 0.95f), Color.white, ActionBackToMain);
         }
 
+        public void InitSkyboxes()
+        {
+            if (skyboxOptions == null || skyboxOptions.Count == 0)
+            {
+                skyboxOptions = new List<SkyboxOption>();
+
+                // Option 0: Solid Black Lab Mode
+                skyboxOptions.Add(new SkyboxOption { 
+                    displayName = "⬛ Solid Black", 
+                    category = "Minimalist Void", 
+                    skyboxMaterial = null 
+                });
+
+#if UNITY_EDITOR
+                // Day & Atmosphere
+                AddSkyboxOption("☀️ Casual Day", "Clear Daylight", "Assets/SkySeries Freebie/CasualDay.mat");
+                AddSkyboxOption("🌅 Cloudy Morning", "Sunrise Pastels", "Assets/SkySeries Freebie/Cloudymorning.mat");
+                AddSkyboxOption("🌤️ Clouded Sun Glow", "Golden Hour", "Assets/SkySeries Freebie/CloudedSunGlow.mat");
+                AddSkyboxOption("☁️ Day In The Clouds", "Cloudtop Horizon", "Assets/SkySeries Freebie/DayInTheClouds.mat");
+                AddSkyboxOption("☁️ Fluffball Day", "Sunny Clouds", "Assets/SkySeries Freebie/FluffballDay.mat");
+
+                // Weather & High Skies
+                AddSkyboxOption("⛅ Skyhigh Fluffy Cloud", "High Altitude", "Assets/SkySeries Freebie/SkyhighFluffycloudField.mat");
+                AddSkyboxOption("🌫️ Sunless Cirrus", "Soft Overcast", "Assets/SkySeries Freebie/SunlessCirruscover.mat");
+                AddSkyboxOption("⚡ Dark Storm", "Thunderstorm", "Assets/SkySeries Freebie/DarkStorm.mat");
+                AddSkyboxOption("☀️ Mega Sun", "Dramatic Sun", "Assets/SkySeries Freebie/MegaSun.mat");
+                AddSkyboxOption("💡 Ambience Exposure", "Studio HDRI", "Assets/SkySeries Freebie/AmbienceExposure.mat");
+                AddSkyboxOption("🔮 High Fantasy", "Dreamscape", "Assets/SkySeries Freebie/HighFantasy.mat");
+
+                // Space, Night & Aquatic
+                AddSkyboxOption("✨ Coriolis Night 4K", "Midnight Stars", "Assets/SkySeries Freebie/CoriolisNight4k.mat");
+                AddSkyboxOption("🌌 Cosmic Cool Cloud", "Deep Nebula", "Assets/SkySeries Freebie/CosmicCoolCloud_Eq.mat");
+                AddSkyboxOption("🌍 Planetary Earth", "Orbital Space", "Assets/SkySeries Freebie/PlanetaryEarth.mat");
+                AddSkyboxOption("🪐 Unearthly Red", "Alien World", "Assets/SkySeries Freebie/UnearthlyRed.mat");
+                AddSkyboxOption("🌊 Under The Sea 4K", "Aquatic Abyss", "Assets/SkySeries Freebie/UnderTheSea4k.mat");
+                AddSkyboxOption("🌌 6-Sided Cosmic Cloud", "Cosmic 360", "Assets/SkySeries Freebie/6sidedCosmicCoolCloud.mat");
+#endif
+            }
+        }
+
+        private void AddSkyboxOption(string name, string category, string assetPath)
+        {
+#if UNITY_EDITOR
+            var mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(assetPath);
+            if (mat != null)
+            {
+                skyboxOptions.Add(new SkyboxOption { 
+                    displayName = name, 
+                    category = category, 
+                    skyboxMaterial = mat 
+                });
+            }
+#endif
+        }
+
+        public void LoadSavedSkyboxPreference()
+        {
+            string saved = PlayerPrefs.GetString("UR3eVR_SelectedSkybox", "");
+            if (!string.IsNullOrEmpty(saved))
+            {
+                var found = skyboxOptions.Find(s => s.displayName == saved);
+                if (found != null)
+                {
+                    ApplySkybox(found);
+                    return;
+                }
+            }
+
+            // Default to Casual Day or first available skybox
+            var defaultOpt = skyboxOptions.Find(s => s.displayName.Contains("Casual Day")) 
+                          ?? skyboxOptions.Find(s => s.skyboxMaterial != null);
+            if (defaultOpt != null)
+            {
+                ApplySkybox(defaultOpt);
+            }
+        }
+
         private void BuildBackgroundPanelContent(Transform p)
         {
-            CreateHeader(p, "Scene & Skybox Background", () => ActionCloseMenu(), () => ActionBackToMain());
+            CreateHeader(p, "Scene & Skybox Environment", () => ActionCloseMenu(), () => ActionBackToMain());
 
-            GameObject contentObj = new GameObject("BgContent");
-            contentObj.transform.SetParent(p, false);
-            RectTransform cRT = contentObj.AddComponent<RectTransform>();
-            cRT.anchorMin = new Vector2(0.08f, 0.20f);
-            cRT.anchorMax = new Vector2(0.92f, 0.80f);
-            cRT.offsetMin = Vector2.zero;
-            cRT.offsetMax = Vector2.zero;
+            // 1. Active Skybox Status Indicator Card
+            GameObject activeCard = new GameObject("ActiveBgCard");
+            activeCard.transform.SetParent(p, false);
+            RectTransform aRT = activeCard.AddComponent<RectTransform>();
+            aRT.anchorMin = new Vector2(0.06f, 0.74f);
+            aRT.anchorMax = new Vector2(0.94f, 0.85f);
+            aRT.offsetMin = Vector2.zero;
+            aRT.offsetMax = Vector2.zero;
 
-            var vlg = contentObj.AddComponent<VerticalLayoutGroup>();
-            vlg.spacing = 16;
-            vlg.childForceExpandWidth = true;
-            vlg.childForceExpandHeight = false;
+            Image aImg = activeCard.AddComponent<Image>();
+            aImg.material = stereoUIMaterial;
+            aImg.color = new Color(0.06f, 0.12f, 0.20f, 0.95f);
 
-            var activeCard = CreatePanel(contentObj.transform, "ActiveBgCard");
-            activeCard.GetComponent<RectTransform>().sizeDelta = new Vector2(0, 90f);
-            activeCard.GetComponent<Image>().color = new Color(0.08f, 0.14f, 0.20f, 0.95f);
-            CreateText(activeCard.transform, "Current Skybox Setting:\n★ Solid Black (#000000) [Default Active]", 18,
-                new Color(0.0f, 0.85f, 1.0f, 1f), TextAnchor.MiddleCenter);
+            Outline aOl = activeCard.AddComponent<Outline>();
+            aOl.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.50f);
+            aOl.effectDistance = new Vector2(1.5f, -1.5f);
 
-            var infoText = CreateTextItem(contentObj.transform,
-                "Background is locked to pure solid black to ensure maximum contrast and visual focus on robot motion & teleoperation.\n\nCustom environment and skybox choices will be available in future updates.",
-                15, new Color(0.75f, 0.75f, 0.75f, 1f));
-            infoText.alignment = TextAnchor.MiddleCenter;
+            activeBgStatusText = CreateText(activeCard.transform, 
+                $"Active Skybox: <b><color=#00E5FF>{currentActiveSkyboxName}</color></b>   <size=13><color=#00FF88>[🟢 Applied to all VR Eyes]</color></size>",
+                16, Color.white, TextAnchor.MiddleCenter);
 
-            CreateSimpleButton(p, "◀ Back to Menu", 42,
+            // 2. 2-Column Buttons Grid Container
+            bgGridContainer = new GameObject("BgGridContainer");
+            bgGridContainer.transform.SetParent(p, false);
+            RectTransform gRT = bgGridContainer.AddComponent<RectTransform>();
+            gRT.anchorMin = new Vector2(0.06f, 0.22f);
+            gRT.anchorMax = new Vector2(0.94f, 0.72f);
+            gRT.offsetMin = Vector2.zero;
+            gRT.offsetMax = Vector2.zero;
+
+            var glg = bgGridContainer.AddComponent<GridLayoutGroup>();
+            glg.cellSize = new Vector2(325f, 66f);
+            glg.spacing = new Vector2(18f, 10f);
+            glg.startCorner = GridLayoutGroup.Corner.UpperLeft;
+            glg.startAxis = GridLayoutGroup.Axis.Horizontal;
+            glg.childAlignment = TextAnchor.MiddleCenter;
+
+            // 3. Pagination Bar
+            GameObject pageBar = new GameObject("PaginationBar");
+            pageBar.transform.SetParent(p, false);
+            RectTransform pbRT = pageBar.AddComponent<RectTransform>();
+            pbRT.anchorMin = new Vector2(0.06f, 0.10f);
+            pbRT.anchorMax = new Vector2(0.94f, 0.19f);
+            pbRT.offsetMin = Vector2.zero;
+            pbRT.offsetMax = Vector2.zero;
+
+            CreatePaginationButton(pageBar.transform, "◀ Prev Page", new Vector2(0f, 0f), new Vector2(0.26f, 1f), () => ChangeBgPage(-1));
+
+            GameObject piObj = new GameObject("PageIndicator");
+            piObj.transform.SetParent(pageBar.transform, false);
+            RectTransform piRT = piObj.AddComponent<RectTransform>();
+            piRT.anchorMin = new Vector2(0.28f, 0f);
+            piRT.anchorMax = new Vector2(0.72f, 1f);
+            piRT.offsetMin = Vector2.zero;
+            piRT.offsetMax = Vector2.zero;
+
+            bgPageIndicatorText = piObj.AddComponent<Text>();
+            bgPageIndicatorText.material = stereoUIMaterial;
+            bgPageIndicatorText.font = uiFont;
+            bgPageIndicatorText.fontSize = 15;
+            bgPageIndicatorText.fontStyle = FontStyle.Bold;
+            bgPageIndicatorText.alignment = TextAnchor.MiddleCenter;
+            bgPageIndicatorText.color = new Color(0.85f, 0.95f, 1.0f, 0.95f);
+
+            CreatePaginationButton(pageBar.transform, "Next Page ▶", new Vector2(0.74f, 0f), new Vector2(1.0f, 1f), () => ChangeBgPage(1));
+
+            // 4. Bottom Bar (Back to Main Menu)
+            GameObject bottomBar = new GameObject("BottomBar");
+            bottomBar.transform.SetParent(p, false);
+            RectTransform bbRT = bottomBar.AddComponent<RectTransform>();
+            bbRT.anchorMin = new Vector2(0.06f, 0.015f);
+            bbRT.anchorMax = new Vector2(0.94f, 0.085f);
+            bbRT.offsetMin = Vector2.zero;
+            bbRT.offsetMax = Vector2.zero;
+
+            CreateSimpleButton(bottomBar.transform, "◀ Back to Main Menu", 36,
                 new Color(0.18f, 0.22f, 0.32f, 0.95f), Color.white, ActionBackToMain);
+
+            RefreshBgPageButtons();
+        }
+
+        private GameObject CreatePaginationButton(Transform parent, string label, Vector2 min, Vector2 max, Action onClick)
+        {
+            GameObject btnObj = new GameObject("Btn_" + label);
+            btnObj.transform.SetParent(parent, false);
+
+            RectTransform rt = btnObj.AddComponent<RectTransform>();
+            rt.anchorMin = min;
+            rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+
+            Image img = btnObj.AddComponent<Image>();
+            img.material = stereoUIMaterial;
+            img.color = new Color(0.16f, 0.22f, 0.32f, 0.95f);
+
+            Button btn = btnObj.AddComponent<Button>();
+            ColorBlock cb = btn.colors;
+            cb.highlightedColor = new Color(0.25f, 0.38f, 0.52f, 1f);
+            cb.pressedColor = new Color(0.10f, 0.15f, 0.24f, 1f);
+            btn.colors = cb;
+            btn.onClick.AddListener(() => onClick());
+            allMenuButtons.Add(btn);
+
+            Outline ol = btnObj.AddComponent<Outline>();
+            ol.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.35f);
+            ol.effectDistance = new Vector2(1f, -1f);
+
+            Text txt = CreateText(btnObj.transform, label, 14, Color.white, TextAnchor.MiddleCenter);
+            txt.fontStyle = FontStyle.Bold;
+
+            return btnObj;
+        }
+
+        public void ChangeBgPage(int delta)
+        {
+            int totalPages = Mathf.CeilToInt((float)skyboxOptions.Count / 6);
+            if (totalPages == 0) totalPages = 1;
+            currentBgPage = Mathf.Clamp(currentBgPage + delta, 0, totalPages - 1);
+            RefreshBgPageButtons();
+
+            OVRInput.SetControllerVibration(0.3f, 0.3f, OVRInput.Controller.RTouch);
+            StartCoroutine(StopHapticsAfter(0.04f));
+        }
+
+        public void RefreshBgPageButtons()
+        {
+            if (bgGridContainer == null) return;
+
+            foreach (var b in activePageButtons)
+            {
+                if (b != null)
+                {
+                    var btnComp = b.GetComponent<Button>();
+                    if (btnComp != null) allMenuButtons.Remove(btnComp);
+                    Destroy(b);
+                }
+            }
+            activePageButtons.Clear();
+
+            int totalPages = Mathf.CeilToInt((float)skyboxOptions.Count / 6);
+            if (totalPages == 0) totalPages = 1;
+            currentBgPage = Mathf.Clamp(currentBgPage, 0, totalPages - 1);
+
+            int startIdx = currentBgPage * 6;
+            int count = Mathf.Min(6, skyboxOptions.Count - startIdx);
+
+            string categoryHeader = "";
+
+            for (int i = 0; i < count; i++)
+            {
+                int optIndex = startIdx + i;
+                var opt = skyboxOptions[optIndex];
+                if (string.IsNullOrEmpty(categoryHeader) && !string.IsNullOrEmpty(opt.category))
+                {
+                    categoryHeader = opt.category;
+                }
+
+                bool isActive = opt.displayName == currentActiveSkyboxName;
+
+                GameObject btnObj = new GameObject("BgBtn_" + optIndex);
+                btnObj.transform.SetParent(bgGridContainer.transform, false);
+
+                Image img = btnObj.AddComponent<Image>();
+                img.material = stereoUIMaterial;
+                img.color = isActive 
+                    ? new Color(0.06f, 0.30f, 0.36f, 0.98f) 
+                    : new Color(0.10f, 0.14f, 0.22f, 0.95f);
+
+                Outline ol = btnObj.AddComponent<Outline>();
+                ol.effectColor = isActive 
+                    ? new Color(0.0f, 1.0f, 0.85f, 0.85f) 
+                    : new Color(1.0f, 1.0f, 1.0f, 0.18f);
+                ol.effectDistance = isActive ? new Vector2(2f, -2f) : new Vector2(1f, -1f);
+
+                Button btn = btnObj.AddComponent<Button>();
+                ColorBlock cb = btn.colors;
+                cb.highlightedColor = isActive ? new Color(0.10f, 0.42f, 0.50f, 1f) : new Color(0.18f, 0.26f, 0.38f, 1f);
+                cb.pressedColor = new Color(0.04f, 0.08f, 0.16f, 1f);
+                btn.colors = cb;
+
+                var capturedOpt = opt;
+                btn.onClick.AddListener(() => ApplySkybox(capturedOpt));
+                allMenuButtons.Add(btn);
+
+                string labelText = isActive 
+                    ? $"<b><color=#00FFAA>{opt.displayName}</color></b>\n<size=12><color=#80E0FF>[Active Environment]</color></size>" 
+                    : $"<b>{opt.displayName}</b>\n<size=12><color=#90CAF9>{opt.category}</color></size>";
+
+                Text txt = CreateText(btnObj.transform, labelText, 14, Color.white, TextAnchor.MiddleCenter);
+                txt.lineSpacing = 1.1f;
+
+                activePageButtons.Add(btnObj);
+            }
+
+            if (bgPageIndicatorText != null)
+            {
+                bgPageIndicatorText.text = $"Page {currentBgPage + 1} of {totalPages}   •   {categoryHeader}";
+            }
+
+            UpdateActiveBgCard();
+        }
+
+        private void UpdateActiveBgCard()
+        {
+            if (activeBgStatusText != null)
+            {
+                activeBgStatusText.text = $"Active Skybox: <b><color=#00E5FF>{currentActiveSkyboxName}</color></b>   <size=13><color=#00FF88>[🟢 Applied to all VR Eyes]</color></size>";
+            }
+        }
+
+        private IEnumerator StopHapticsAfter(float seconds)
+        {
+            yield return new WaitForSeconds(seconds);
+            OVRInput.SetControllerVibration(0f, 0f, OVRInput.Controller.RTouch);
+        }
+
+        public void ApplySkybox(SkyboxOption opt)
+        {
+            if (opt == null) return;
+            currentActiveSkyboxName = opt.displayName;
+
+            var cams = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            if (opt.skyboxMaterial == null)
+            {
+                foreach (var c in cams)
+                {
+                    if (c != null)
+                    {
+                        c.clearFlags = CameraClearFlags.SolidColor;
+                        c.backgroundColor = Color.black;
+                    }
+                }
+                RenderSettings.skybox = null;
+            }
+            else
+            {
+                foreach (var c in cams)
+                {
+                    if (c != null)
+                    {
+                        c.clearFlags = CameraClearFlags.Skybox;
+                    }
+                }
+                RenderSettings.skybox = opt.skyboxMaterial;
+            }
+
+            DynamicGI.UpdateEnvironment();
+
+            PlayerPrefs.SetString("UR3eVR_SelectedSkybox", opt.displayName);
+            PlayerPrefs.Save();
+
+            AddLog("SYSTEM", $"Skybox Environment set to: {opt.displayName}");
+            RefreshBgPageButtons();
+
+            OVRInput.SetControllerVibration(0.5f, 0.4f, OVRInput.Controller.RTouch);
+            StartCoroutine(StopHapticsAfter(0.06f));
+
+            var glove = FindAnyObjectByType<BhapticsGloveFeedback>();
+            if (glove != null)
+            {
+                glove.TriggerClickPulse(60, 60);
+            }
         }
 
         // =========================================================================
