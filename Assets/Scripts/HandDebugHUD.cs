@@ -1,47 +1,84 @@
-﻿using System;
+using System;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace UR3eVR
 {
     /// <summary>
-    /// HandDebugHUD: Stereoscopic VR HUD displaying real-time UR3e robot teleoperation telemetry.
-    /// - Replaces legacy OnGUI() with a World Space Canvas rendered in BOTH eyes (Single Pass Instanced).
-    /// - Follows peripheral headset view or attaches to tracking space cleanly.
-    /// - Displays XYZ target vs actual coordinates, bridge connection, grip force, and pause state.
+    /// HandDebugHUD: Apple Vision Pro OS Style Floating Telemetry Card for Meta Quest VR
+    /// - Styled using JetXR UI Kit For Vision Pro OS (frosted glass, pill grab bar, sleek typography)
+    /// - Dual-eye stereo rendering in XR Single Pass Instanced (renders in BOTH eyes)
+    /// - Accurate 3D Quad raycast hitbox for laser-based repositioning
     /// </summary>
     public class HandDebugHUD : MonoBehaviour
     {
-        [Header("References")]
+        public static HandDebugHUD Instance { get; private set; }
+
+        [Header("Components to Monitor")]
         public PinchDetector pinchDetector;
         public GripperBridge gripperBridge;
         public VRHandMover vrHandMover;
         public UR3eStarterPoint starterPoint;
         public SafetyBoundaryVisualizer safetyVisualizer;
         public script webcamScript;
-        public Transform centerEyeAnchor;
 
-        [Header("HUD Canvas Settings")]
-        public float hudDistance = 1.35f;
-        public float hudHeightOffset = -0.18f;
-        public float hudSideOffset = -0.42f; // Left peripheral view
-        public float followSpeed = 6.0f;
+        [Header("HUD Transform Settings")]
+        public float hudDistance = 0.85f;
+        public float hudSideOffset = -0.38f;
+        public float hudHeightOffset = -0.05f;
 
-        // UI GameObjects
+        // UI Canvas References
         private GameObject hudCanvasObj;
-        private bool hasPositionedDefault = false;
         private Canvas hudCanvas;
         private Text titleText;
-        private Text telemetryText;
         private Text pauseBannerText;
-        private Text helpText;
+        private Text telemetryText;
         private Image backgroundImage;
-        private Material stereoUIMat;
+        private Transform centerEyeAnchor;
+        private bool hasPositionedDefault = false;
+
+        // Vision Pro OS UI Kit Assets
+        private Material visionWindowMaterial;
+        private Material visionElementMaterial;
+        private Sprite windowGlassSprite;
+        private Sprite roundedRectSprite;
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+            Instance = this;
+
+            LoadVisionProAssets();
+        }
 
         private void Start()
         {
             FindReferences();
             BuildStereoHUDCanvas();
+        }
+
+        private void LoadVisionProAssets()
+        {
+#if UNITY_EDITOR
+            visionWindowMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/WindowBlurredBackground.mat")
+                                ?? AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/WindowOverlayBackground.mat");
+            visionElementMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/LightElementBackground.mat")
+                                 ?? AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/DarkElementBackground.mat");
+            windowGlassSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Windows/WindowGlass.png");
+            roundedRectSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Buttons/RoundedRectBackground.png");
+#endif
+            if (visionWindowMaterial == null) visionWindowMaterial = Resources.Load<Material>("VisionUI/WindowBlurredBackground");
+            if (visionElementMaterial == null) visionElementMaterial = Resources.Load<Material>("VisionUI/LightElementBackground");
+            if (windowGlassSprite == null) windowGlassSprite = Resources.Load<Sprite>("VisionUI/WindowGlass");
+            if (roundedRectSprite == null) roundedRectSprite = Resources.Load<Sprite>("VisionUI/RoundedRectBackground");
         }
 
         private void FindReferences()
@@ -63,125 +100,155 @@ namespace UR3eVR
 
         private void BuildStereoHUDCanvas()
         {
-            hudCanvasObj = new GameObject("StereoHandDebugHUD_Canvas");
+            hudCanvasObj = new GameObject("StereoHandDebugHUD_Canvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             hudCanvasObj.transform.SetParent(null, false);
 
-            hudCanvas = hudCanvasObj.AddComponent<Canvas>();
+            hudCanvas = hudCanvasObj.GetComponent<Canvas>();
             hudCanvas.renderMode = RenderMode.WorldSpace;
-            hudCanvasObj.AddComponent<CanvasScaler>();
+            if (centerEyeAnchor != null)
+            {
+                var cam = centerEyeAnchor.GetComponent<Camera>();
+                if (cam != null) hudCanvas.worldCamera = cam;
+            }
 
-            var gr = hudCanvasObj.AddComponent<GraphicRaycaster>();
+            var scaler = hudCanvasObj.GetComponent<CanvasScaler>();
+            scaler.dynamicPixelsPerUnit = 10f;
 
             RectTransform canvasRT = hudCanvasObj.GetComponent<RectTransform>();
             canvasRT.sizeDelta = new Vector2(480f, 320f);
-            canvasRT.localScale = Vector3.one * 0.0016f; // ~0.75m wide in VR
+            canvasRT.localScale = Vector3.one * 0.0016f; // ~0.77m wide in VR
 
-            Shader stereoShader = Shader.Find("UR3eVR/StereoUI") ?? Shader.Find("UI/Default");
-            stereoUIMat = new Material(stereoShader);
-
-            // Background Panel
-            GameObject bgObj = new GameObject("Background");
+            // Vision Pro Frosted Glass Background Panel
+            GameObject bgObj = new GameObject("Background", typeof(RectTransform), typeof(Image));
             bgObj.transform.SetParent(hudCanvasObj.transform, false);
-            RectTransform bgRT = bgObj.AddComponent<RectTransform>();
+            RectTransform bgRT = bgObj.GetComponent<RectTransform>();
             bgRT.anchorMin = Vector2.zero;
             bgRT.anchorMax = Vector2.one;
             bgRT.offsetMin = Vector2.zero;
             bgRT.offsetMax = Vector2.zero;
 
-            backgroundImage = bgObj.AddComponent<Image>();
-            backgroundImage.material = stereoUIMat;
-            backgroundImage.color = new Color(0.04f, 0.07f, 0.12f, 0.88f);
+            backgroundImage = bgObj.GetComponent<Image>();
+            if (windowGlassSprite != null)
+            {
+                backgroundImage.sprite = windowGlassSprite;
+                backgroundImage.type = Image.Type.Sliced;
+                backgroundImage.pixelsPerUnitMultiplier = 2f;
+                backgroundImage.material = visionWindowMaterial;
+                backgroundImage.color = new Color(1f, 1f, 1f, 0.92f);
+            }
+            else
+            {
+                backgroundImage.material = null;
+                backgroundImage.color = new Color(0.06f, 0.09f, 0.14f, 0.92f);
+            }
 
             var ol = bgObj.AddComponent<Outline>();
-            ol.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.40f);
-            ol.effectDistance = new Vector2(2, -2);
+            ol.effectColor = new Color(1.0f, 1.0f, 1.0f, 0.25f);
+            ol.effectDistance = new Vector2(1.5f, -1.5f);
 
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (font == null) font = Font.CreateDynamicFontFromOSFont("Arial", 16);
 
             // Title
-            GameObject titleObj = new GameObject("Title");
+            GameObject titleObj = new GameObject("Title", typeof(RectTransform), typeof(Text));
             titleObj.transform.SetParent(bgObj.transform, false);
-            RectTransform titleRT = titleObj.AddComponent<RectTransform>();
-            titleRT.anchorMin = new Vector2(0.04f, 0.86f);
-            titleRT.anchorMax = new Vector2(0.96f, 0.98f);
+            RectTransform titleRT = titleObj.GetComponent<RectTransform>();
+            titleRT.anchorMin = new Vector2(0.05f, 0.86f);
+            titleRT.anchorMax = new Vector2(0.95f, 0.98f);
             titleRT.offsetMin = Vector2.zero;
             titleRT.offsetMax = Vector2.zero;
 
-            titleText = titleObj.AddComponent<Text>();
-            titleText.material = stereoUIMat;
+            titleText = titleObj.GetComponent<Text>();
+            titleText.material = null; // Standard CanvasRenderer renders to BOTH EYES
             titleText.font = font;
-            titleText.fontSize = 18;
+            titleText.fontSize = 17;
             titleText.fontStyle = FontStyle.Bold;
             titleText.alignment = TextAnchor.MiddleLeft;
-            titleText.color = new Color(0.0f, 1.0f, 0.85f, 1.0f);
-            titleText.text = "UR3e TELEOPERATION TELEMETRY (STEREO)";
+            titleText.color = Color.white;
+            titleText.text = "UR3e Teleoperation Telemetry";
 
             // Pause Banner
-            GameObject pauseObj = new GameObject("PauseBanner");
+            GameObject pauseObj = new GameObject("PauseBanner", typeof(RectTransform), typeof(Text));
             pauseObj.transform.SetParent(bgObj.transform, false);
-            RectTransform pauseRT = pauseObj.AddComponent<RectTransform>();
+            RectTransform pauseRT = pauseObj.GetComponent<RectTransform>();
             pauseRT.anchorMin = new Vector2(0.55f, 0.86f);
-            pauseRT.anchorMax = new Vector2(0.96f, 0.98f);
+            pauseRT.anchorMax = new Vector2(0.95f, 0.98f);
             pauseRT.offsetMin = Vector2.zero;
             pauseRT.offsetMax = Vector2.zero;
 
-            pauseBannerText = pauseObj.AddComponent<Text>();
-            pauseBannerText.material = stereoUIMat;
+            pauseBannerText = pauseObj.GetComponent<Text>();
+            pauseBannerText.material = null;
             pauseBannerText.font = font;
-            pauseBannerText.fontSize = 16;
+            pauseBannerText.fontSize = 15;
             pauseBannerText.fontStyle = FontStyle.Bold;
             pauseBannerText.alignment = TextAnchor.MiddleRight;
             pauseBannerText.color = Color.yellow;
             pauseBannerText.text = "";
 
             // Main Telemetry Text
-            GameObject bodyObj = new GameObject("TelemetryText");
+            GameObject bodyObj = new GameObject("TelemetryText", typeof(RectTransform), typeof(Text));
             bodyObj.transform.SetParent(bgObj.transform, false);
-            RectTransform bodyRT = bodyObj.AddComponent<RectTransform>();
-            bodyRT.anchorMin = new Vector2(0.04f, 0.16f);
-            bodyRT.anchorMax = new Vector2(0.96f, 0.84f);
+            RectTransform bodyRT = bodyObj.GetComponent<RectTransform>();
+            bodyRT.anchorMin = new Vector2(0.05f, 0.16f);
+            bodyRT.anchorMax = new Vector2(0.95f, 0.84f);
             bodyRT.offsetMin = Vector2.zero;
             bodyRT.offsetMax = Vector2.zero;
 
-            telemetryText = bodyObj.AddComponent<Text>();
-            telemetryText.material = stereoUIMat;
+            telemetryText = bodyObj.GetComponent<Text>();
+            telemetryText.material = null;
             telemetryText.font = font;
             telemetryText.fontSize = 13;
             telemetryText.lineSpacing = 1.15f;
             telemetryText.alignment = TextAnchor.UpperLeft;
-            telemetryText.color = Color.white;
+            telemetryText.color = new Color(0.9f, 0.95f, 1.0f, 0.95f);
 
-            // Bottom Grab Handle Bar with VRWindowDragger (Draggable via Left Remote Laser)
-            GameObject grabBarObj = new GameObject("GrabHandleBar");
+            // VisionOS Bottom Pill Grab Handle Bar with VRWindowDragger
+            GameObject grabBarObj = new GameObject("GrabHandleBar", typeof(RectTransform), typeof(Image), typeof(VRWindowDragger));
             grabBarObj.transform.SetParent(bgObj.transform, false);
-            RectTransform grabRT = grabBarObj.AddComponent<RectTransform>();
-            grabRT.anchorMin = new Vector2(0.20f, 0.02f);
-            grabRT.anchorMax = new Vector2(0.80f, 0.12f);
+            RectTransform grabRT = grabBarObj.GetComponent<RectTransform>();
+            grabRT.anchorMin = new Vector2(0.24f, 0.03f);
+            grabRT.anchorMax = new Vector2(0.76f, 0.11f);
             grabRT.offsetMin = Vector2.zero;
             grabRT.offsetMax = Vector2.zero;
+            grabRT.pivot = new Vector2(0.5f, 0.5f);
 
-            Image grabImg = grabBarObj.AddComponent<Image>();
-            grabImg.material = stereoUIMat;
-            grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
+            Image grabImg = grabBarObj.GetComponent<Image>();
+            if (roundedRectSprite != null)
+            {
+                grabImg.sprite = roundedRectSprite;
+                grabImg.type = Image.Type.Sliced;
+                grabImg.material = visionElementMaterial;
+                grabImg.color = new Color(0.25f, 0.32f, 0.44f, 0.92f);
+            }
+            else
+            {
+                grabImg.material = null;
+                grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
+            }
 
-            var dragger = grabBarObj.AddComponent<VRWindowDragger>();
+            Outline grabOutline = grabBarObj.AddComponent<Outline>();
+            grabOutline.effectColor = new Color(1.0f, 1.0f, 1.0f, 0.25f);
+            grabOutline.effectDistance = new Vector2(1f, -1f);
+
+            var dragger = grabBarObj.GetComponent<VRWindowDragger>();
             dragger.windowTransform = hudCanvasObj.transform;
+            dragger.handleImage = grabImg;
 
-            GameObject grabLabel = new GameObject("Label");
+            GameObject grabLabel = new GameObject("Label", typeof(RectTransform), typeof(Text));
             grabLabel.transform.SetParent(grabBarObj.transform, false);
-            RectTransform glRT = grabLabel.AddComponent<RectTransform>();
+            RectTransform glRT = grabLabel.GetComponent<RectTransform>();
             glRT.anchorMin = Vector2.zero;
             glRT.anchorMax = Vector2.one;
             glRT.offsetMin = Vector2.zero;
             glRT.offsetMax = Vector2.zero;
-            Text glText = grabLabel.AddComponent<Text>();
+            Text glText = grabLabel.GetComponent<Text>();
+            glText.material = null;
             glText.font = font;
             glText.fontSize = 11;
             glText.fontStyle = FontStyle.Bold;
             glText.alignment = TextAnchor.MiddleCenter;
-            glText.color = new Color(0.0f, 0.85f, 1.0f, 0.95f);
-            glText.text = "--- GRAB TO MOVE ---";
+            glText.color = new Color(0.9f, 0.95f, 1.0f, 0.90f);
+            glText.text = "═══  GRAB TO MOVE  ═══";
         }
 
         public void RepositionDefault()

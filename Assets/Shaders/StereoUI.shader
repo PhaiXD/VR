@@ -1,4 +1,4 @@
-﻿Shader "UR3eVR/StereoUI"
+Shader "UR3eVR/StereoUI"
 {
     Properties
     {
@@ -25,7 +25,6 @@
             "RenderType"="Transparent"
             "PreviewType"="Plane"
             "CanUseSpriteAtlas"="True"
-            "RenderPipeline"="UniversalPipeline"
         }
 
         Stencil
@@ -48,75 +47,59 @@
         {
             Name "Default"
 
-            HLSLPROGRAM
+            CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
             #pragma target 2.0
 
-            #pragma multi_compile_instancing
+            #include "UnityCG.cginc"
+            #include "UnityUI.cginc"
+
             #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
             #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-
-            struct Attributes
+            struct appdata_t
             {
-                float4 positionOS   : POSITION;
-                float4 color        : COLOR;
-                float2 uv           : TEXCOORD0;
+                float4 vertex   : POSITION;
+                float4 color    : COLOR;
+                float2 texcoord : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
-            struct Varyings
+            struct v2f
             {
-                float4 positionCS   : SV_POSITION;
-                float4 color        : COLOR;
-                float2 uv           : TEXCOORD0;
+                float4 vertex   : SV_POSITION;
+                fixed4 color    : COLOR;
+                float2 texcoord : TEXCOORD0;
                 float4 worldPosition : TEXCOORD1;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            TEXTURE2D(_MainTex);
-            SAMPLER(sampler_MainTex);
+            sampler2D _MainTex;
+            fixed4 _Color;
+            fixed4 _BaseColor;
+            fixed4 _TextureSampleAdd;
+            float4 _ClipRect;
 
-            CBUFFER_START(UnityPerMaterial)
-                float4 _Color;
-                float4 _BaseColor;
-                float4 _ClipRect;
-                float4 _MainTex_ST;
-                float4 _TextureSampleAdd;
-            CBUFFER_END
-
-            inline float UnityGet2DClipping(in float2 position, in float4 clipRect)
+            v2f vert(appdata_t v)
             {
-                float2 inside = step(clipRect.xy, position.xy) * step(position.xy, clipRect.zw);
-                return inside.x * inside.y;
+                v2f OUT;
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
+                OUT.worldPosition = v.vertex;
+                OUT.vertex = UnityObjectToClipPos(OUT.worldPosition);
+                OUT.texcoord = v.texcoord;
+                OUT.color = v.color * _Color * _BaseColor;
+                return OUT;
             }
 
-            Varyings vert(Attributes input)
+            fixed4 frag(v2f IN) : SV_Target
             {
-                Varyings output = (Varyings)0;
-                UNITY_SETUP_INSTANCE_ID(input);
-                UNITY_TRANSFER_INSTANCE_ID(input, output);
-                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
-
-                output.worldPosition = input.positionOS;
-                output.positionCS = TransformWorldToHClip(TransformObjectToWorld(input.positionOS.xyz));
-                output.uv = TRANSFORM_TEX(input.uv, _MainTex);
-                output.color = input.color * _Color * _BaseColor;
-                return output;
-            }
-
-            half4 frag(Varyings input) : SV_Target
-            {
-                UNITY_SETUP_INSTANCE_ID(input);
-                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
-
-                half4 color = (SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv) + _TextureSampleAdd) * input.color;
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
+                half4 color = (tex2D(_MainTex, IN.texcoord) + _TextureSampleAdd) * IN.color;
 
                 #ifdef UNITY_UI_CLIP_RECT
-                color.a *= UnityGet2DClipping(input.worldPosition.xy, _ClipRect);
+                color.a *= UnityGet2DClipping(IN.worldPosition.xy, _ClipRect);
                 #endif
 
                 #ifdef UNITY_UI_ALPHACLIP
@@ -125,7 +108,7 @@
 
                 return color;
             }
-            ENDHLSL
+            ENDCG
         }
     }
 

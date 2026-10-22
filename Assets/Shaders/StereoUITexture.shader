@@ -1,100 +1,116 @@
-Shader "UR3eVR/StereoUITexture"
+Shader "UR3eVR/StereoUI"
 {
     Properties
     {
-        [MainTexture] _MainTex ("Texture", 2D) = "white" {}
-        [MainColor] _BaseColor ("Base Color", Color) = (1, 1, 1, 1)
-        _Color ("Color", Color) = (1, 1, 1, 1)
-        [Enum(UnityEngine.Rendering.CullMode)] _Cull ("Cull", Float) = 0
+        [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
+        [MainColor] _Color ("Tint", Color) = (1,1,1,1)
+        _BaseColor ("Base Color", Color) = (1,1,1,1)
+        _TextureSampleAdd ("Texture Sample Add", Vector) = (0,0,0,0)
+
+        _StencilComp ("Stencil Comparison", Float) = 8
+        _Stencil ("Stencil ID", Float) = 0
+        _StencilOp ("Stencil Operation", Float) = 0
+        _StencilWriteMask ("Stencil Write Mask", Float) = 255
+        _StencilReadMask ("Stencil Read Mask", Float) = 255
+        _ColorMask ("Color Mask", Float) = 15
+        [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
     }
 
     SubShader
     {
         Tags
         {
-            "Queue" = "Transparent"
-            "RenderType" = "Transparent"
-            "RenderPipeline" = "UniversalPipeline"
-            "IgnoreProjector" = "True"
+            "Queue"="Transparent"
+            "IgnoreProjector"="True"
+            "RenderType"="Transparent"
+            "PreviewType"="Plane"
+            "CanUseSpriteAtlas"="True"
         }
+
+        Stencil
+        {
+            Ref [_Stencil]
+            Comp [_StencilComp]
+            Pass [_StencilOp]
+            ReadMask [_StencilReadMask]
+            WriteMask [_StencilWriteMask]
+        }
+
+        Cull Off
+        Lighting Off
+        ZWrite Off
+        ZTest [unity_GUIZTestMode]
+        Blend SrcAlpha OneMinusSrcAlpha
+        ColorMask [_ColorMask]
 
         Pass
         {
-            Name "Forward"
-            Tags { "LightMode" = "UniversalForward" }
+            Name "Default"
 
-            Cull [_Cull]
-            Blend SrcAlpha OneMinusSrcAlpha
-            ZWrite Off
-            ZTest LEqual
-
-            HLSLPROGRAM
-            #pragma target 3.0
+            CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma multi_compile_instancing
+            #pragma target 2.0
 
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "UnityCG.cginc"
+            #include "UnityUI.cginc"
 
-            struct Attributes
+            #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
+            #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
+
+            struct appdata_t
             {
-                float4 positionOS   : POSITION;
-                float2 uv           : TEXCOORD0;
-                float4 color        : COLOR;
+                float4 vertex   : POSITION;
+                float4 color    : COLOR;
+                float2 texcoord : TEXCOORD0;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
-            struct Varyings
+            struct v2f
             {
-                float4 positionCS   : SV_POSITION;
-                float2 uv           : TEXCOORD0;
-                float4 color        : COLOR;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
+                float4 vertex   : SV_POSITION;
+                fixed4 color    : COLOR;
+                float2 texcoord : TEXCOORD0;
+                float4 worldPosition : TEXCOORD1;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            TEXTURE2D(_MainTex);
-            SAMPLER(sampler_MainTex);
+            sampler2D _MainTex;
+            fixed4 _Color;
+            fixed4 _BaseColor;
+            fixed4 _TextureSampleAdd;
+            float4 _ClipRect;
 
-            CBUFFER_START(UnityPerMaterial)
-                float4 _BaseColor;
-                float4 _Color;
-                float4 _MainTex_ST;
-            CBUFFER_END
-
-            Varyings vert(Attributes input)
+            v2f vert(appdata_t v)
             {
-                Varyings output = (Varyings)0;
-
-                UNITY_SETUP_INSTANCE_ID(input);
-                UNITY_TRANSFER_INSTANCE_ID(input, output);
-                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
-
-                VertexPositionInputs vertexInputs = GetVertexPositionInputs(input.positionOS.xyz);
-                output.positionCS = vertexInputs.positionCS;
-                output.uv = TRANSFORM_TEX(input.uv, _MainTex);
-
-                float4 vCol = input.color;
-                if (vCol.r == 0.0 && vCol.g == 0.0 && vCol.b == 0.0 && vCol.a == 0.0)
-                {
-                    vCol = float4(1.0, 1.0, 1.0, 1.0);
-                }
-                output.color = vCol * _BaseColor * _Color;
-
-                return output;
+                v2f OUT;
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(OUT);
+                OUT.worldPosition = v.vertex;
+                OUT.vertex = UnityObjectToClipPos(OUT.worldPosition);
+                OUT.texcoord = v.texcoord;
+                OUT.color = v.color * _Color * _BaseColor;
+                return OUT;
             }
 
-            half4 frag(Varyings input) : SV_Target
+            fixed4 frag(v2f IN) : SV_Target
             {
-                UNITY_SETUP_INSTANCE_ID(input);
-                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
+                half4 color = (tex2D(_MainTex, IN.texcoord) + _TextureSampleAdd) * IN.color;
 
-                half4 texCol = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
-                return texCol * input.color;
+                #ifdef UNITY_UI_CLIP_RECT
+                color.a *= UnityGet2DClipping(IN.worldPosition.xy, _ClipRect);
+                #endif
+
+                #ifdef UNITY_UI_ALPHACLIP
+                clip(color.a - 0.001);
+                #endif
+
+                return color;
             }
-            ENDHLSL
+            ENDCG
         }
     }
 
-    FallBack "Universal Render Pipeline/Unlit"
+    FallBack "UI/Default"
 }

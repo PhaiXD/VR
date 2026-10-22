@@ -1,27 +1,30 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace UR3eVR
 {
     /// <summary>
-    /// VRCameraWindow: Floating Horizon OS Style Webcam Monitor for Meta Quest VR
-    /// - Auto-starts on startup in front of user
-    /// - Dedicated private material instance (NEVER pollutes Graphic.defaultGraphicMaterial / other UI buttons)
-    /// - CenterEyeAnchor Canvas worldCamera tracking for Single Pass Instanced stereo rendering
-    /// - Grab Bar for positioning in 3D Space
-    /// - Switch Camera & Close Header buttons
+    /// VRCameraWindow: Apple Vision Pro OS Style Floating Webcam Monitor for Meta Quest VR
+    /// - Styled using JetXR UI Kit For Vision Pro OS (frosted glass, pill buttons, rounded glass window)
+    /// - Perfectly centered 16:9 RawImage viewport (eliminates "จอกล้องเบี้ยว" skew / overflow)
+    /// - Dual-eye stereo rendering in XR Single Pass Instanced (eliminates single-left-eye UI bug)
+    /// - Accurate 3D Quad raycast hitboxes for Switch Cam, Close Button, and Pill Grab Bar
     /// </summary>
     public class VRCameraWindow : MonoBehaviour
     {
         public static VRCameraWindow Instance { get; private set; }
 
-        [Header("Camera Configuration")]
-        [Tooltip("Width of window in meters")]
-        public float windowWidthMeters = 0.65f;
+        [Header("Window Configuration")]
+        [Tooltip("Width of window in meters in VR")]
+        public float windowWidthMeters = 0.68f;
 
-        [Tooltip("Height of window in meters")]
+        [Tooltip("Height of window in meters in VR")]
         public float windowHeightMeters = 0.44f;
 
         [Tooltip("Distance in front of user on spawn")]
@@ -35,29 +38,31 @@ namespace UR3eVR
         private GameObject canvasObj;
         private Canvas canvas;
         private RawImage videoRawImage;
-        private Text titleText;
-        private Text subtitleText;
+        private TextMeshProUGUI titleText;
+        private TextMeshProUGUI subtitleText;
         private Image liveDotImage;
         private GameObject grabBarObj;
         private VRWindowDragger dragger;
 
-        // Dedicated private material instance to prevent texture pollution
-        private Material privateVideoMaterial;
-        private Material stereoUIMaterial;
+        // Vision Pro OS UI Kit Assets
+        [Header("Vision Pro OS Asset References")]
+        public Material visionWindowMaterial;
+        public Material visionElementMaterial;
+        public Sprite windowGlassSprite;
+        public Sprite roundedRectSprite;
+        public Sprite roundedRectHighlightSprite;
+        public Sprite crossIconSprite;
+        public TMP_FontAsset visionFont;
 
         // Webcam runtime
         private WebCamTexture webcamTexture;
         public WebCamDevice[] availableDevices { get; private set; }
-        private Font uiFont;
 
-        // References
+        // VR References
         private Camera centerEyeCamera;
-        private Transform rightControllerAnchor;
         private Transform leftControllerAnchor;
-        private PinchDetector pinchDetector;
+        private Transform rightControllerAnchor;
 
-        // Poke Debounce
-        private float lastPokeTime = 0f;
         private bool hasPositionedDefault = false;
         private List<Button> interactiveButtons = new List<Button>();
 
@@ -69,16 +74,96 @@ namespace UR3eVR
                 return;
             }
             Instance = this;
+
+            LoadVisionProAssets();
         }
 
         private void Start()
         {
             FindReferences();
-            LoadFont();
             BuildCameraWindowUI();
             InitializeWebcam();
-
             SetWindowOpen(true);
+        }
+
+        private void LoadVisionProAssets()
+        {
+            // 1. Vision Window Frosted Glass Material
+            if (visionWindowMaterial == null)
+            {
+#if UNITY_EDITOR
+                visionWindowMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/WindowBlurredBackground.mat")
+                                    ?? AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/WindowOverlayBackground.mat");
+#endif
+                if (visionWindowMaterial == null)
+                {
+                    visionWindowMaterial = Resources.Load<Material>("VisionUI/WindowBlurredBackground")
+                                        ?? Resources.Load<Material>("VisionUI/WindowOverlayBackground");
+                }
+            }
+
+            // 2. Vision Element Platter Material
+            if (visionElementMaterial == null)
+            {
+#if UNITY_EDITOR
+                visionElementMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/LightElementBackground.mat")
+                                     ?? AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/DarkElementBackground.mat");
+#endif
+                if (visionElementMaterial == null)
+                {
+                    visionElementMaterial = Resources.Load<Material>("VisionUI/LightElementBackground")
+                                         ?? Resources.Load<Material>("VisionUI/DarkElementBackground");
+                }
+            }
+
+            // 3. Vision Sprites
+            if (windowGlassSprite == null)
+            {
+#if UNITY_EDITOR
+                windowGlassSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Windows/WindowGlass.png")
+                                 ?? AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Windows/WindowGlassNoAlpha.png");
+#endif
+                if (windowGlassSprite == null)
+                    windowGlassSprite = Resources.Load<Sprite>("VisionUI/WindowGlass");
+            }
+
+            if (roundedRectSprite == null)
+            {
+#if UNITY_EDITOR
+                roundedRectSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Buttons/RoundedRectBackground.png");
+#endif
+                if (roundedRectSprite == null)
+                    roundedRectSprite = Resources.Load<Sprite>("VisionUI/RoundedRectBackground");
+            }
+
+            if (roundedRectHighlightSprite == null)
+            {
+#if UNITY_EDITOR
+                roundedRectHighlightSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Buttons/RoundedRectHighlight.png");
+#endif
+                if (roundedRectHighlightSprite == null)
+                    roundedRectHighlightSprite = Resources.Load<Sprite>("VisionUI/RoundedRectHighlight");
+            }
+
+            if (crossIconSprite == null)
+            {
+#if UNITY_EDITOR
+                crossIconSprite = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Icons/Cross Icon.png");
+#endif
+                if (crossIconSprite == null)
+                    crossIconSprite = Resources.Load<Sprite>("VisionUI/Cross Icon");
+            }
+
+            // 4. Vision Font
+            if (visionFont == null)
+            {
+#if UNITY_EDITOR
+                visionFont = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/JetXR/UI Kit For Vision Pro OS/Fonts/Resources/Inter-SemiBold SDF.asset")
+                          ?? AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/JetXR/UI Kit For Vision Pro OS/Fonts/Resources/Inter-Bold SDF.asset");
+#endif
+                if (visionFont == null)
+                    visionFont = Resources.Load<TMP_FontAsset>("Inter-SemiBold SDF") ?? Resources.Load<TMP_FontAsset>("Inter-Bold SDF");
+            }
         }
 
         private void FindReferences()
@@ -101,196 +186,186 @@ namespace UR3eVR
                 var rca = GameObject.Find("RightControllerAnchor");
                 if (rca != null) rightControllerAnchor = rca.transform;
             }
-
-            if (pinchDetector == null) pinchDetector = FindAnyObjectByType<PinchDetector>();
-        }
-
-        private void LoadFont()
-        {
-            try
-            {
-                uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            }
-            catch
-            {
-                uiFont = null;
-            }
         }
 
         private void BuildCameraWindowUI()
         {
-            canvasObj = new GameObject("VR_Camera_Window_Canvas");
+            // Root WorldSpace Canvas
+            canvasObj = new GameObject("VR_Camera_Window_Canvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasObj.transform.SetParent(transform, false);
 
-            canvas = canvasObj.AddComponent<Canvas>();
+            canvas = canvasObj.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
             if (centerEyeCamera != null) canvas.worldCamera = centerEyeCamera;
 
-            var scaler = canvasObj.AddComponent<CanvasScaler>();
+            var scaler = canvasObj.GetComponent<CanvasScaler>();
             scaler.dynamicPixelsPerUnit = 10f;
-            canvasObj.AddComponent<GraphicRaycaster>();
 
             RectTransform canvasRT = canvasObj.GetComponent<RectTransform>();
-            canvasRT.sizeDelta = new Vector2(650f, 440f);
-            canvasRT.localScale = Vector3.one * (windowWidthMeters / 650f);
+            canvasRT.sizeDelta = new Vector2(680f, 440f);
+            canvasRT.localScale = Vector3.one * (windowWidthMeters / 680f);
 
-            // 1. Frosted Obsidian Glass Background Card
+            // 1. Vision Pro OS Frosted Glass Window Frame
             Image bgImg = canvasObj.AddComponent<Image>();
-            bgImg.material = null; // Clean default
-            bgImg.color = new Color(0.07f, 0.08f, 0.12f, 0.92f);
+            if (windowGlassSprite != null)
+            {
+                bgImg.sprite = windowGlassSprite;
+                bgImg.type = Image.Type.Sliced;
+                bgImg.pixelsPerUnitMultiplier = 2f;
+                bgImg.material = visionWindowMaterial;
+                bgImg.color = new Color(1f, 1f, 1f, 0.92f);
+            }
+            else
+            {
+                bgImg.material = null;
+                bgImg.color = new Color(0.08f, 0.10f, 0.16f, 0.94f);
+            }
 
             Outline bgOutline = canvasObj.AddComponent<Outline>();
-            bgOutline.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.40f);
-            bgOutline.effectDistance = new Vector2(2f, -2f);
+            bgOutline.effectColor = new Color(1.0f, 1.0f, 1.0f, 0.22f);
+            bgOutline.effectDistance = new Vector2(1.5f, -1.5f);
 
-            // 2. Header Bar
-            GameObject header = new GameObject("HeaderBar");
+            // 2. Vision Pro OS Navigation Bar (Header)
+            GameObject header = new GameObject("HeaderBar", typeof(RectTransform));
             header.transform.SetParent(canvasObj.transform, false);
-            RectTransform hRT = header.AddComponent<RectTransform>();
+            RectTransform hRT = header.GetComponent<RectTransform>();
             hRT.anchorMin = new Vector2(0f, 0.84f);
             hRT.anchorMax = new Vector2(1f, 1f);
             hRT.offsetMin = Vector2.zero;
             hRT.offsetMax = Vector2.zero;
 
-            Image hImg = header.AddComponent<Image>();
-            hImg.material = stereoUIMaterial;
-            hImg.color = new Color(0.04f, 0.05f, 0.08f, 0.98f);
-
-            // 2.1 Live Indicator Dot
-            GameObject liveDot = new GameObject("LiveDot");
+            // 2.1 Live Indicator Dot (Apple Vision Green Dot)
+            GameObject liveDot = new GameObject("LiveDot", typeof(RectTransform), typeof(Image));
             liveDot.transform.SetParent(header.transform, false);
-            RectTransform dotRT = liveDot.AddComponent<RectTransform>();
-            dotRT.anchorMin = new Vector2(0.03f, 0.35f);
-            dotRT.anchorMax = new Vector2(0.03f, 0.35f);
-            dotRT.sizeDelta = new Vector2(12f, 12f);
-            liveDotImage = liveDot.AddComponent<Image>();
-            liveDotImage.material = stereoUIMaterial;
-            liveDotImage.color = new Color(0.1f, 1.0f, 0.4f, 1.0f);
+            RectTransform dotRT = liveDot.GetComponent<RectTransform>();
+            dotRT.anchorMin = new Vector2(0.035f, 0.50f);
+            dotRT.anchorMax = new Vector2(0.035f, 0.50f);
+            dotRT.pivot = new Vector2(0.5f, 0.5f);
+            dotRT.sizeDelta = new Vector2(10f, 10f);
+            liveDotImage = liveDot.GetComponent<Image>();
+            liveDotImage.material = null; // Standard UI renderer for both eyes
+            liveDotImage.color = new Color(0.19f, 0.82f, 0.35f, 1.0f);
 
-            // 2.2 Title & Subtitle Texts
-            GameObject titleObj = new GameObject("TitleText");
+            // 2.2 Title & Subtitle Texts (TMP with Vision font)
+            GameObject titleObj = new GameObject("TitleText", typeof(RectTransform), typeof(TextMeshProUGUI));
             titleObj.transform.SetParent(header.transform, false);
-            RectTransform titleRT = titleObj.AddComponent<RectTransform>();
+            RectTransform titleRT = titleObj.GetComponent<RectTransform>();
             titleRT.anchorMin = new Vector2(0.06f, 0.45f);
-            titleRT.anchorMax = new Vector2(0.55f, 0.90f);
+            titleRT.anchorMax = new Vector2(0.55f, 0.92f);
             titleRT.offsetMin = Vector2.zero;
             titleRT.offsetMax = Vector2.zero;
-            titleText = titleObj.AddComponent<Text>();
-            titleText.font = uiFont;
+            titleText = titleObj.GetComponent<TextMeshProUGUI>();
+            if (visionFont != null) titleText.font = visionFont;
             titleText.fontSize = 17;
-            titleText.fontStyle = FontStyle.Bold;
+            titleText.fontStyle = FontStyles.Bold;
             titleText.color = Color.white;
-            titleText.material = stereoUIMaterial;
             titleText.text = "Camera Feed [Live]";
 
-            GameObject subObj = new GameObject("SubtitleText");
+            GameObject subObj = new GameObject("SubtitleText", typeof(RectTransform), typeof(TextMeshProUGUI));
             subObj.transform.SetParent(header.transform, false);
-            RectTransform subRT = subObj.AddComponent<RectTransform>();
-            subRT.anchorMin = new Vector2(0.06f, 0.10f);
-            subRT.anchorMax = new Vector2(0.55f, 0.45f);
+            RectTransform subRT = subObj.GetComponent<RectTransform>();
+            subRT.anchorMin = new Vector2(0.06f, 0.08f);
+            subRT.anchorMax = new Vector2(0.55f, 0.46f);
             subRT.offsetMin = Vector2.zero;
             subRT.offsetMax = Vector2.zero;
-            subtitleText = subObj.AddComponent<Text>();
-            subtitleText.font = uiFont;
+            subtitleText = subObj.GetComponent<TextMeshProUGUI>();
+            if (visionFont != null) subtitleText.font = visionFont;
             subtitleText.fontSize = 12;
-            subtitleText.color = new Color(0.0f, 0.85f, 1.0f, 0.85f);
-            subtitleText.material = stereoUIMaterial;
-            subtitleText.text = "Detecting devices...";
+            subtitleText.color = new Color(0.6f, 0.75f, 0.9f, 0.85f);
+            subtitleText.text = "Detecting video devices...";
 
-            // 2.3 Action Buttons on Header (Switch Camera, Close)
-            CreateHeaderButton(header.transform, "SwitchCam", "\u21bb Switch Cam", new Vector2(0.58f, 0.18f), new Vector2(0.82f, 0.82f),
-                new Color(0.12f, 0.22f, 0.38f, 0.95f), () => CycleNextCamera());
+            // 2.3 Action Buttons on Header (VisionOS Platter Pill Buttons)
+            // Switch Camera Button
+            CreateVisionPillButton(header.transform, "SwitchCam", "↻ Switch Cam", 
+                new Vector2(0.56f, 0.16f), new Vector2(0.84f, 0.84f), () => CycleNextCamera());
 
-            CreateHeaderButton(header.transform, "CloseBtn", "\u2715", new Vector2(0.86f, 0.18f), new Vector2(0.97f, 0.82f),
-                new Color(0.40f, 0.15f, 0.18f, 0.95f), () => SetWindowOpen(false));
+            // Close Button (Circular Vision Pro style button)
+            CreateVisionCloseButton(header.transform, "CloseBtn", 
+                new Vector2(0.88f, 0.16f), new Vector2(0.965f, 0.84f), () => SetWindowOpen(false));
 
-            // 3. Center Screen: Video Container with RectMask2D (No Skew or Overflow)
-            GameObject videoContainer = new GameObject("VideoContainer");
+            // 3. Center Screen: Video Container with RectMask2D (PERFECTLY CENTERED, NO SKEW)
+            GameObject videoContainer = new GameObject("VideoContainer", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
             videoContainer.transform.SetParent(canvasObj.transform, false);
-            RectTransform contRT = videoContainer.AddComponent<RectTransform>();
-            contRT.anchorMin = new Vector2(0.04f, 0.13f);
-            contRT.anchorMax = new Vector2(0.96f, 0.83f);
+            RectTransform contRT = videoContainer.GetComponent<RectTransform>();
+            contRT.anchorMin = new Vector2(0.035f, 0.13f);
+            contRT.anchorMax = new Vector2(0.965f, 0.83f);
             contRT.offsetMin = Vector2.zero;
             contRT.offsetMax = Vector2.zero;
             contRT.pivot = new Vector2(0.5f, 0.5f);
 
-            Image contBg = videoContainer.AddComponent<Image>();
-            contBg.color = new Color(0.02f, 0.03f, 0.05f, 0.95f);
-            videoContainer.AddComponent<RectMask2D>();
+            Image contBg = videoContainer.GetComponent<Image>();
+            contBg.material = null;
+            contBg.color = new Color(0.03f, 0.04f, 0.06f, 0.98f);
 
-            // Video Feed (RawImage) perfectly contained
-            GameObject videoObj = new GameObject("VideoDisplay");
+            // Video Feed (RawImage) strictly centered and fitted to 16:9
+            GameObject videoObj = new GameObject("VideoDisplay", typeof(RectTransform), typeof(RawImage), typeof(AspectRatioFitter));
             videoObj.transform.SetParent(videoContainer.transform, false);
-            RectTransform vidRT = videoObj.AddComponent<RectTransform>();
+            RectTransform vidRT = videoObj.GetComponent<RectTransform>();
             vidRT.anchorMin = Vector2.zero;
             vidRT.anchorMax = Vector2.one;
             vidRT.offsetMin = Vector2.zero;
             vidRT.offsetMax = Vector2.zero;
             vidRT.pivot = new Vector2(0.5f, 0.5f);
 
-            videoRawImage = videoObj.AddComponent<RawImage>();
+            videoRawImage = videoObj.GetComponent<RawImage>();
             videoRawImage.color = Color.white;
+            // Native CanvasRenderer default material renders to BOTH EYES with 0 vertex displacement
+            videoRawImage.material = null;
 
-            var arf = videoObj.AddComponent<AspectRatioFitter>();
+            var arf = videoObj.GetComponent<AspectRatioFitter>();
             arf.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
             arf.aspectRatio = 16f / 9f;
 
-            // ISOLATED PRIVATE MATERIAL: Guarantees webcam texture NEVER leaks to other UI buttons!
-            Shader stShader = Shader.Find("UR3eVR/StereoUI") ?? Shader.Find("UR3eVR/StereoUITexture")
-                           ?? Shader.Find("Universal Render Pipeline/Unlit")
-                           ?? Shader.Find("Unlit/Texture");
-            if (stShader != null)
+            // Video Border Frame
+            Outline vidOutline = videoObj.AddComponent<Outline>();
+            vidOutline.effectColor = new Color(1f, 1f, 1f, 0.15f);
+            vidOutline.effectDistance = new Vector2(1f, -1f);
+
+            // 4. Apple Vision Pro OS Pill Grab Handle Bar
+            grabBarObj = new GameObject("GrabHandleBar", typeof(RectTransform), typeof(Image), typeof(VRWindowDragger));
+            grabBarObj.transform.SetParent(canvasObj.transform, false);
+            RectTransform grabRT = grabBarObj.GetComponent<RectTransform>();
+            grabRT.anchorMin = new Vector2(0.32f, 0.025f);
+            grabRT.anchorMax = new Vector2(0.68f, 0.095f);
+            grabRT.offsetMin = Vector2.zero;
+            grabRT.offsetMax = Vector2.zero;
+            grabRT.pivot = new Vector2(0.5f, 0.5f);
+
+            Image grabImg = grabBarObj.GetComponent<Image>();
+            if (roundedRectSprite != null)
             {
-                privateVideoMaterial = new Material(stShader);
-                privateVideoMaterial.name = "VRCamera_IsolatedVideoMat";
-                privateVideoMaterial.enableInstancing = true;
-                videoRawImage.material = privateVideoMaterial;
+                grabImg.sprite = roundedRectSprite;
+                grabImg.type = Image.Type.Sliced;
+                grabImg.material = visionElementMaterial;
+                grabImg.color = new Color(0.25f, 0.32f, 0.44f, 0.92f);
             }
             else
             {
-                videoRawImage.material = null;
+                grabImg.material = null;
+                grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
             }
 
-            // Video Border Frame
-            Outline vidOutline = videoObj.AddComponent<Outline>();
-            vidOutline.effectColor = new Color(0.15f, 0.25f, 0.38f, 0.70f);
-            vidOutline.effectDistance = new Vector2(1f, -1f);
-
-            // 4. Meta Horizon OS Bottom Pill Grab Handle Bar
-            grabBarObj = new GameObject("GrabHandleBar");
-            grabBarObj.transform.SetParent(canvasObj.transform, false);
-            RectTransform grabRT = grabBarObj.AddComponent<RectTransform>();
-            grabRT.anchorMin = new Vector2(0.25f, 0.02f);
-            grabRT.anchorMax = new Vector2(0.75f, 0.10f);
-            grabRT.offsetMin = Vector2.zero;
-            grabRT.offsetMax = Vector2.zero;
-
-            Image grabImg = grabBarObj.AddComponent<Image>();
-            grabImg.material = stereoUIMaterial;
-            grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
-
             Outline grabOutline = grabBarObj.AddComponent<Outline>();
-            grabOutline.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.30f);
+            grabOutline.effectColor = new Color(1.0f, 1.0f, 1.0f, 0.25f);
             grabOutline.effectDistance = new Vector2(1f, -1f);
 
             // Grab Bar Label
-            GameObject grabLabelObj = new GameObject("GrabLabel");
+            GameObject grabLabelObj = new GameObject("GrabLabel", typeof(RectTransform), typeof(TextMeshProUGUI));
             grabLabelObj.transform.SetParent(grabBarObj.transform, false);
-            RectTransform glRT = grabLabelObj.AddComponent<RectTransform>();
+            RectTransform glRT = grabLabelObj.GetComponent<RectTransform>();
             glRT.anchorMin = Vector2.zero;
             glRT.anchorMax = Vector2.one;
             glRT.offsetMin = Vector2.zero;
             glRT.offsetMax = Vector2.zero;
-            Text grabLabel = grabLabelObj.AddComponent<Text>();
-            grabLabel.font = uiFont;
-            grabLabel.fontSize = 13;
-            grabLabel.alignment = TextAnchor.MiddleCenter;
-            grabLabel.color = new Color(0.8f, 0.9f, 1.0f, 0.85f);
-            grabLabel.material = stereoUIMaterial;
-            grabLabel.text = "\u2550\u2550\u2550  GRAB TO MOVE  \u2550\u2550\u2550";
+            var grabLabel = grabLabelObj.GetComponent<TextMeshProUGUI>();
+            if (visionFont != null) grabLabel.font = visionFont;
+            grabLabel.fontSize = 12;
+            grabLabel.alignment = TextAlignmentOptions.Center;
+            grabLabel.color = new Color(0.9f, 0.95f, 1.0f, 0.90f);
+            grabLabel.text = "═══  GRAB TO MOVE  ═══";
 
             // Attach VRWindowDragger
-            dragger = grabBarObj.AddComponent<VRWindowDragger>();
+            dragger = grabBarObj.GetComponent<VRWindowDragger>();
             dragger.windowTransform = canvasObj.transform;
             dragger.handleImage = grabImg;
 
@@ -298,49 +373,136 @@ namespace UR3eVR
             RepositionWindowDefault();
         }
 
-        private void CreateHeaderButton(Transform parent, string name, string label, Vector2 min, Vector2 max, Color bgCol, Action onClick)
+        private void CreateVisionPillButton(Transform parent, string name, string label, Vector2 min, Vector2 max, Action onClick)
         {
-            GameObject btnObj = new GameObject(name);
+            GameObject btnObj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
             btnObj.transform.SetParent(parent, false);
 
-            RectTransform rt = btnObj.AddComponent<RectTransform>();
+            RectTransform rt = btnObj.GetComponent<RectTransform>();
             rt.anchorMin = min;
             rt.anchorMax = max;
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
 
-            Image img = btnObj.AddComponent<Image>();
-            img.material = stereoUIMaterial;
+            Image img = btnObj.GetComponent<Image>();
+            if (roundedRectSprite != null)
+            {
+                img.sprite = roundedRectSprite;
+                img.type = Image.Type.Sliced;
+                img.material = visionElementMaterial;
+                img.color = new Color(0.20f, 0.32f, 0.52f, 0.95f);
+            }
+            else
+            {
+                img.material = null;
+                img.color = new Color(0.14f, 0.24f, 0.40f, 0.95f);
+            }
             img.raycastTarget = true;
-            img.color = bgCol;
 
-            Button btn = btnObj.AddComponent<Button>();
+            Button btn = btnObj.GetComponent<Button>();
             ColorBlock cb = btn.colors;
-            cb.highlightedColor = bgCol * 1.35f;
-            cb.pressedColor = bgCol * 0.75f;
+            cb.normalColor = Color.white;
+            cb.highlightedColor = new Color(1.3f, 1.3f, 1.3f, 1f);
+            cb.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
             btn.colors = cb;
             btn.onClick.AddListener(() => onClick());
 
             Outline ol = btnObj.AddComponent<Outline>();
-            ol.effectColor = new Color(1f, 1f, 1f, 0.20f);
+            ol.effectColor = new Color(1f, 1f, 1f, 0.25f);
             ol.effectDistance = new Vector2(1f, -1f);
 
-            GameObject txtObj = new GameObject("Text");
+            GameObject txtObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
             txtObj.transform.SetParent(btnObj.transform, false);
-            RectTransform tRT = txtObj.AddComponent<RectTransform>();
+            RectTransform tRT = txtObj.GetComponent<RectTransform>();
             tRT.anchorMin = Vector2.zero;
             tRT.anchorMax = Vector2.one;
             tRT.offsetMin = Vector2.zero;
             tRT.offsetMax = Vector2.zero;
-            Text txt = txtObj.AddComponent<Text>();
-            txt.font = uiFont;
-            txt.fontSize = 14;
-            txt.fontStyle = FontStyle.Bold;
-            txt.alignment = TextAnchor.MiddleCenter;
+            TextMeshProUGUI txt = txtObj.GetComponent<TextMeshProUGUI>();
+            if (visionFont != null) txt.font = visionFont;
+            txt.fontSize = 13;
+            txt.fontStyle = FontStyles.Bold;
+            txt.alignment = TextAlignmentOptions.Center;
             txt.color = Color.white;
-            txt.material = stereoUIMaterial;
             txt.raycastTarget = false;
             txt.text = label;
+
+            interactiveButtons.Add(btn);
+        }
+
+        private void CreateVisionCloseButton(Transform parent, string name, Vector2 min, Vector2 max, Action onClick)
+        {
+            GameObject btnObj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+            btnObj.transform.SetParent(parent, false);
+
+            RectTransform rt = btnObj.GetComponent<RectTransform>();
+            rt.anchorMin = min;
+            rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+
+            Image img = btnObj.GetComponent<Image>();
+            if (roundedRectSprite != null)
+            {
+                img.sprite = roundedRectSprite;
+                img.type = Image.Type.Sliced;
+                img.material = visionElementMaterial;
+                img.color = new Color(0.50f, 0.18f, 0.22f, 0.95f);
+            }
+            else
+            {
+                img.material = null;
+                img.color = new Color(0.40f, 0.15f, 0.18f, 0.95f);
+            }
+            img.raycastTarget = true;
+
+            Button btn = btnObj.GetComponent<Button>();
+            ColorBlock cb = btn.colors;
+            cb.normalColor = Color.white;
+            cb.highlightedColor = new Color(1.3f, 1.3f, 1.3f, 1f);
+            cb.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
+            btn.colors = cb;
+            btn.onClick.AddListener(() => onClick());
+
+            Outline ol = btnObj.AddComponent<Outline>();
+            ol.effectColor = new Color(1f, 1f, 1f, 0.25f);
+            ol.effectDistance = new Vector2(1f, -1f);
+
+            if (crossIconSprite != null)
+            {
+                GameObject iconObj = new GameObject("CrossIcon", typeof(RectTransform), typeof(Image));
+                iconObj.transform.SetParent(btnObj.transform, false);
+                RectTransform iRT = iconObj.GetComponent<RectTransform>();
+                iRT.anchorMin = new Vector2(0.2f, 0.2f);
+                iRT.anchorMax = new Vector2(0.8f, 0.8f);
+                iRT.offsetMin = Vector2.zero;
+                iRT.offsetMax = Vector2.zero;
+                Image iImg = iconObj.GetComponent<Image>();
+                iImg.sprite = crossIconSprite;
+                iImg.material = null;
+                iImg.color = Color.white;
+                iImg.raycastTarget = false;
+            }
+            else
+            {
+                GameObject txtObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+                txtObj.transform.SetParent(btnObj.transform, false);
+                RectTransform tRT = txtObj.GetComponent<RectTransform>();
+                tRT.anchorMin = Vector2.zero;
+                tRT.anchorMax = Vector2.one;
+                tRT.offsetMin = Vector2.zero;
+                tRT.offsetMax = Vector2.zero;
+                TextMeshProUGUI txt = txtObj.GetComponent<TextMeshProUGUI>();
+                if (visionFont != null) txt.font = visionFont;
+                txt.fontSize = 15;
+                txt.fontStyle = FontStyles.Bold;
+                txt.alignment = TextAlignmentOptions.Center;
+                txt.color = Color.white;
+                txt.raycastTarget = false;
+                txt.text = "✕";
+            }
 
             interactiveButtons.Add(btn);
         }
@@ -348,15 +510,27 @@ namespace UR3eVR
         public void RepositionWindowDefault()
         {
             if (centerEyeCamera == null) FindReferences();
-            Transform refT = centerEyeCamera != null ? centerEyeCamera.transform : Camera.main?.transform;
-            if (refT == null || canvasObj == null) return;
+            if (centerEyeCamera == null && Camera.main != null) centerEyeCamera = Camera.main;
 
-            Vector3 fwd = Vector3.ProjectOnPlane(refT.forward, Vector3.up).normalized;
-            if (fwd.sqrMagnitude < 0.01f) fwd = refT.forward;
+            if (canvasObj == null) return;
 
-            // Place in upper right peripheral view (42cm right, 10cm up)
-            canvasObj.transform.position = refT.position + fwd * defaultDistance + refT.right * 0.42f + Vector3.up * 0.10f;
-            canvasObj.transform.rotation = Quaternion.LookRotation(fwd, Vector3.up);
+            if (centerEyeCamera != null)
+            {
+                Vector3 headPos = centerEyeCamera.transform.position;
+                Vector3 headFwd = centerEyeCamera.transform.forward;
+                headFwd.y = 0;
+                if (headFwd.sqrMagnitude < 0.01f) headFwd = Vector3.forward;
+                headFwd.Normalize();
+
+                Vector3 targetPos = headPos + headFwd * defaultDistance + Vector3.up * 0.12f;
+                canvasObj.transform.position = targetPos;
+                canvasObj.transform.rotation = Quaternion.LookRotation(headFwd, Vector3.up);
+            }
+            else
+            {
+                canvasObj.transform.localPosition = new Vector3(0f, 1.25f, defaultDistance);
+                canvasObj.transform.localRotation = Quaternion.identity;
+            }
 
             if (canvas != null && centerEyeCamera != null)
             {
@@ -406,10 +580,6 @@ namespace UR3eVR
                 if (videoRawImage != null)
                 {
                     videoRawImage.texture = webcamTexture;
-                    if (privateVideoMaterial != null)
-                    {
-                        privateVideoMaterial.mainTexture = webcamTexture;
-                    }
                 }
 
                 // Clean defaultGraphicMaterial to prevent contamination of other UI buttons
@@ -422,7 +592,7 @@ namespace UR3eVR
 
                 if (titleText != null) titleText.text = $"Camera [{currentCameraIndex + 1}/{availableDevices.Length}]";
                 if (subtitleText != null) subtitleText.text = $"{devName} (Streaming)";
-                if (liveDotImage != null) liveDotImage.color = new Color(0.1f, 1.0f, 0.4f, 1.0f);
+                if (liveDotImage != null) liveDotImage.color = new Color(0.19f, 0.82f, 0.35f, 1.0f);
             }
             catch (Exception ex)
             {
@@ -480,42 +650,7 @@ namespace UR3eVR
             if (liveDotImage != null && webcamTexture != null && webcamTexture.isPlaying)
             {
                 float alpha = 0.5f + Mathf.PingPong(Time.time * 2f, 0.5f);
-                liveDotImage.color = new Color(0.1f, 1.0f, 0.4f, alpha);
-            }
-
-            // Right hand poke removed (teleoperation safety)
-        }
-
-        private void CheckDirectHandPoke()
-        {
-            if (pinchDetector == null || pinchDetector.indexTipTransform == null) return;
-            if (Time.time - lastPokeTime < 0.35f) return;
-
-            Vector3 fingerPos = pinchDetector.indexTipTransform.position;
-
-            foreach (var btn in interactiveButtons)
-            {
-                if (btn == null || !btn.gameObject.activeInHierarchy || !btn.interactable) continue;
-
-                RectTransform rt = btn.GetComponent<RectTransform>();
-                if (rt == null) continue;
-
-                Vector3 localPos = rt.InverseTransformPoint(fingerPos);
-                Rect r = rt.rect;
-
-                if (r.Contains(new Vector2(localPos.x, localPos.y)) && Mathf.Abs(localPos.z) <= 0.025f)
-                {
-                    btn.onClick.Invoke();
-                    lastPokeTime = Time.time;
-
-                    try
-                    {
-                        OVRInput.SetControllerVibration(0.3f, 0.3f, OVRInput.Controller.LTouch);
-                    }
-                    catch { }
-
-                    break;
-                }
+                liveDotImage.color = new Color(0.19f, 0.82f, 0.35f, alpha);
             }
         }
 

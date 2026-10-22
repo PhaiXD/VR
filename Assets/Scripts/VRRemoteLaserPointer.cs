@@ -329,113 +329,166 @@ namespace UR3eVR
             wasTriggerDown = isTriggerDown;
         }
 
+        public static bool RaycastRectTransformQuad(Ray ray, RectTransform rt, float marginRatio, out float distance, out Vector3 hitPoint, out Vector3 hitNormal)
+        {
+            distance = 0f;
+            hitPoint = Vector3.zero;
+            hitNormal = Vector3.forward;
+
+            if (rt == null || !rt.gameObject.activeInHierarchy) return false;
+
+            Vector3[] c = new Vector3[4];
+            rt.GetWorldCorners(c);
+            // c[0] = bottom-left, c[1] = top-left, c[2] = top-right, c[3] = bottom-right
+
+            Vector3 right = c[3] - c[0];
+            Vector3 up = c[1] - c[0];
+            float rSq = right.sqrMagnitude;
+            float uSq = up.sqrMagnitude;
+            if (rSq < 1e-7f || uSq < 1e-7f) return false;
+
+            Vector3 normal = Vector3.Cross(right, up).normalized;
+            if (normal.sqrMagnitude < 0.001f) return false;
+
+            // Two-sided plane intersection so pointing angle never fails
+            if (Vector3.Dot(normal, ray.direction) > 0f)
+            {
+                normal = -normal;
+            }
+
+            Plane plane = new Plane(normal, c[0]);
+            if (!plane.Raycast(ray, out float enter)) return false;
+            if (enter <= 0.05f) return false;
+
+            Vector3 p = ray.GetPoint(enter);
+            Vector3 v = p - c[0];
+
+            float u = Vector3.Dot(v, right) / rSq;
+            float w = Vector3.Dot(v, up) / uSq;
+
+            float minBound = -marginRatio;
+            float maxBound = 1.0f + marginRatio;
+
+            if (u >= minBound && u <= maxBound && w >= minBound && w <= maxBound)
+            {
+                distance = enter;
+                hitPoint = p;
+                hitNormal = normal;
+                return true;
+            }
+
+            return false;
+        }
+
         private bool RaycastUIAndDraggers(Ray ray, ref Vector3 endPoint, ref Vector3 hitNormal, ref Selectable hitSelectable, ref VRWindowDragger hitDragger)
         {
-            float closestDist = maxRayLength;
-            bool hitAnything = false;
+            float closestInteractableDist = maxRayLength;
+            Selectable bestSel = null;
+            VRWindowDragger bestDragger = null;
+            Vector3 bestInteractableHit = Vector3.zero;
+            Vector3 bestInteractableNormal = -ray.direction;
 
-            // 1. Raycast World Space Canvases
-            var canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
-            foreach (var c in canvases)
+            // 1. Raycast all active VRWindowDraggers directly against their world quad
+            var draggers = FindObjectsByType<VRWindowDragger>(FindObjectsSortMode.None);
+            foreach (var d in draggers)
             {
-                if (c == null || !c.gameObject.activeInHierarchy || c.renderMode != RenderMode.WorldSpace) continue;
-
-                RectTransform crt = c.GetComponent<RectTransform>();
-                if (crt == null) continue;
-
-                // Two-sided plane intersection so rotation angle never breaks hit detection
-                Vector3 planeNormal = -c.transform.forward;
-                if (Vector3.Dot(planeNormal, ray.direction) > 0f)
+                if (d == null || !d.gameObject.activeInHierarchy) continue;
+                RectTransform drt = d.GetComponent<RectTransform>();
+                if (drt != null)
                 {
-                    planeNormal = c.transform.forward;
-                }
-
-                Plane plane = new Plane(planeNormal, c.transform.position);
-                float enter;
-                if (plane.Raycast(ray, out enter) && enter > 0.05f && enter < closestDist)
-                {
-                    Vector3 worldHit = ray.GetPoint(enter);
-                    Vector3 localHit = crt.InverseTransformPoint(worldHit);
-                    Rect r = crt.rect;
-
-                    if (r.Contains(new Vector2(localHit.x, localHit.y)))
+                    // 20% margin for comfortable VR grabbing
+                    if (RaycastRectTransformQuad(ray, drt, 0.20f, out float dist, out Vector3 pt, out Vector3 norm))
                     {
-                        // Check Buttons/Selectables within this canvas
-                        var selectables = c.GetComponentsInChildren<Selectable>(false);
-                        Selectable bestSel = null;
-                        float bestSelDist = float.MaxValue;
-
-                        foreach (var sel in selectables)
+                        if (dist < closestInteractableDist)
                         {
-                            if (sel == null || !sel.gameObject.activeInHierarchy || !sel.interactable) continue;
-                            RectTransform srt = sel.GetComponent<RectTransform>();
-                            if (srt == null) continue;
-
-                            Vector3 selLocal = srt.InverseTransformPoint(worldHit);
-                            Rect sRect = srt.rect;
-                            // Generous VR comfort margin (20px) so small buttons (Close [X], Back [<-]) are very easy to hit!
-                            sRect.xMin -= 20f; sRect.xMax += 20f;
-                            sRect.yMin -= 20f; sRect.yMax += 20f;
-
-                            if (sRect.Contains(new Vector2(selLocal.x, selLocal.y)))
-                            {
-                                float d = (new Vector2(selLocal.x, selLocal.y) - srt.rect.center).sqrMagnitude;
-                                if (d < bestSelDist)
-                                {
-                                    bestSelDist = d;
-                                    bestSel = sel;
-                                }
-                            }
+                            closestInteractableDist = dist;
+                            bestDragger = d;
+                            bestSel = null;
+                            bestInteractableHit = pt;
+                            bestInteractableNormal = norm;
                         }
-
-                        // Check Window Draggers in canvas
-                        VRWindowDragger thisDragger = null;
-                        var draggers = c.GetComponentsInChildren<VRWindowDragger>(false);
-                        foreach (var d in draggers)
-                        {
-                            if (d == null || !d.gameObject.activeInHierarchy) continue;
-                            RectTransform drt = d.GetComponent<RectTransform>();
-                            if (drt != null)
-                            {
-                                Vector3 dLocal = drt.InverseTransformPoint(worldHit);
-                                Rect dRect = drt.rect;
-                                dRect.xMin -= 20f; dRect.xMax += 20f;
-                                dRect.yMin -= 20f; dRect.yMax += 20f;
-                                if (dRect.Contains(new Vector2(dLocal.x, dLocal.y)))
-                                {
-                                    thisDragger = d;
-                                    break;
-                                }
-                            }
-                        }
-
-                        closestDist = enter;
-                        endPoint = worldHit;
-                        hitNormal = planeNormal;
-                        hitSelectable = bestSel;
-                        hitDragger = thisDragger;
-                        hitAnything = true;
                     }
                 }
             }
 
-            // 2. Physics Raycast fallback for 3D Draggers / Colliders
-            RaycastHit hit;
-            if (Physics.Raycast(ray, out hit, closestDist))
+            // 2. Raycast all active Selectables (Buttons, Toggles, etc.) directly against their world quads
+            var selectables = FindObjectsByType<Selectable>(FindObjectsSortMode.None);
+            foreach (var sel in selectables)
             {
-                closestDist = hit.distance;
-                endPoint = hit.point;
-                hitNormal = hit.normal;
-                hitAnything = true;
+                if (sel == null || !sel.gameObject.activeInHierarchy || !sel.interactable) continue;
+                RectTransform srt = sel.GetComponent<RectTransform>();
+                if (srt == null) continue;
 
-                var btn = hit.collider.GetComponentInParent<Selectable>();
-                if (btn != null && btn.interactable) hitSelectable = btn;
-
-                var drag = hit.collider.GetComponentInParent<VRWindowDragger>();
-                if (drag != null) hitDragger = drag;
+                // 15% margin for comfortable VR clicking
+                if (RaycastRectTransformQuad(ray, srt, 0.15f, out float dist, out Vector3 pt, out Vector3 norm))
+                {
+                    if (dist < closestInteractableDist)
+                    {
+                        closestInteractableDist = dist;
+                        bestSel = sel;
+                        bestDragger = null;
+                        bestInteractableHit = pt;
+                        bestInteractableNormal = norm;
+                    }
+                }
             }
 
-            return hitAnything;
+            // If we hit an interactable (button or dragger), prioritize it!
+            if (bestSel != null || bestDragger != null)
+            {
+                endPoint = bestInteractableHit;
+                hitNormal = bestInteractableNormal;
+                hitSelectable = bestSel;
+                hitDragger = bestDragger;
+                return true;
+            }
+
+            // 3. Fallback: Raycast WorldSpace Canvases so laser beam lands smoothly on the window glass
+            float closestCanvasDist = maxRayLength;
+            Vector3 bestCanvasHit = Vector3.zero;
+            Vector3 bestCanvasNormal = -ray.direction;
+            bool hitCanvas = false;
+
+            var canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            foreach (var c in canvases)
+            {
+                if (c == null || !c.gameObject.activeInHierarchy || c.renderMode != RenderMode.WorldSpace) continue;
+                RectTransform crt = c.GetComponent<RectTransform>();
+                if (crt == null) continue;
+
+                if (RaycastRectTransformQuad(ray, crt, 0.02f, out float dist, out Vector3 pt, out Vector3 norm))
+                {
+                    if (dist < closestCanvasDist)
+                    {
+                        closestCanvasDist = dist;
+                        bestCanvasHit = pt;
+                        bestCanvasNormal = norm;
+                        hitCanvas = true;
+                    }
+                }
+            }
+
+            if (hitCanvas)
+            {
+                endPoint = bestCanvasHit;
+                hitNormal = bestCanvasNormal;
+                return true;
+            }
+
+            // 4. Physics Raycast fallback for 3D Draggers / Colliders
+            RaycastHit hit;
+            if (Physics.Raycast(ray, out hit, maxRayLength))
+            {
+                endPoint = hit.point;
+                hitNormal = hit.normal;
+                var drg = hit.collider.GetComponentInParent<VRWindowDragger>();
+                if (drg != null) hitDragger = drg;
+                var btn = hit.collider.GetComponentInParent<Selectable>();
+                if (btn != null && btn.interactable) hitSelectable = btn;
+                return true;
+            }
+
+            return false;
         }
 
         private void UpdateHoverStates(Selectable newSelectable, VRWindowDragger newDragger)

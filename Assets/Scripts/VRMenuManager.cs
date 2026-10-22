@@ -64,6 +64,11 @@ namespace UR3eVR
 
         // UI Materials (Single Pass Instanced Stereo Fix)
         private Material stereoUIMaterial;
+        private Material visionWindowMaterial;
+        private Material visionElementMaterial;
+        private Sprite windowGlassSprite;
+        private Sprite roundedRectSprite;
+        private Sprite crossIconSprite;
         private Material laserMaterial;
 
         // UI GameObjects
@@ -207,6 +212,25 @@ namespace UR3eVR
             // UI/Default natively handles vertex color tinting, font glyph atlases, and alpha blending.
             // When Canvas.worldCamera is assigned to CenterEyeAnchor, it renders in BOTH eyes in VR.
             stereoUIMaterial = null;
+#if UNITY_EDITOR
+            if (visionWindowMaterial == null)
+                visionWindowMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/WindowBlurredBackground.mat")
+                                    ?? UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/WindowOverlayBackground.mat");
+            if (visionElementMaterial == null)
+                visionElementMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/LightElementBackground.mat")
+                                     ?? UnityEditor.AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/DarkElementBackground.mat");
+            if (windowGlassSprite == null)
+                windowGlassSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Windows/WindowGlass.png");
+            if (roundedRectSprite == null)
+                roundedRectSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Buttons/RoundedRectBackground.png");
+            if (crossIconSprite == null)
+                crossIconSprite = UnityEditor.AssetDatabase.LoadAssetAtPath<Sprite>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Sprites/Icons/Cross Icon.png");
+#endif
+            if (visionWindowMaterial == null) visionWindowMaterial = Resources.Load<Material>("VisionUI/WindowBlurredBackground");
+            if (visionElementMaterial == null) visionElementMaterial = Resources.Load<Material>("VisionUI/LightElementBackground");
+            if (windowGlassSprite == null) windowGlassSprite = Resources.Load<Sprite>("VisionUI/WindowGlass");
+            if (roundedRectSprite == null) roundedRectSprite = Resources.Load<Sprite>("VisionUI/RoundedRectBackground");
+            if (crossIconSprite == null) crossIconSprite = Resources.Load<Sprite>("VisionUI/Cross Icon");
 
             Shader unlitShader = Shader.Find("Universal Render Pipeline/Unlit")
                               ?? Shader.Find("UR3eVR/StereoUnlitColor")
@@ -915,10 +939,21 @@ namespace UR3eVR
             grabRT.offsetMax = Vector2.zero;
 
             Image grabImg = grabBar.AddComponent<Image>();
-            grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
+            if (roundedRectSprite != null)
+            {
+                grabImg.sprite = roundedRectSprite;
+                grabImg.type = Image.Type.Sliced;
+                grabImg.material = visionElementMaterial;
+                grabImg.color = new Color(0.25f, 0.32f, 0.44f, 0.92f);
+            }
+            else
+            {
+                grabImg.material = null;
+                grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
+            }
 
             Outline grabOutline = grabBar.AddComponent<Outline>();
-            grabOutline.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.35f);
+            grabOutline.effectColor = new Color(1f, 1f, 1f, 0.25f);
             grabOutline.effectDistance = new Vector2(1f, -1f);
 
             GameObject grabLabelObj = new GameObject("GrabLabel");
@@ -951,15 +986,25 @@ namespace UR3eVR
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
 
-            // Background Card with Stereo-Compatible Material
+            // Vision Pro Frosted Glass Window Frame
             Image img = p.AddComponent<Image>();
-            img.material = stereoUIMaterial;
-            img.color = new Color(0.06f, 0.08f, 0.12f, 0.94f);
+            if (windowGlassSprite != null)
+            {
+                img.sprite = windowGlassSprite;
+                img.type = Image.Type.Sliced;
+                img.pixelsPerUnitMultiplier = 2f;
+                img.material = visionWindowMaterial;
+                img.color = new Color(1f, 1f, 1f, 0.92f);
+            }
+            else
+            {
+                img.material = null;
+                img.color = new Color(0.06f, 0.08f, 0.12f, 0.94f);
+            }
 
-            // Subtle border outline
             Outline outline = p.AddComponent<Outline>();
-            outline.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.35f);
-            outline.effectDistance = new Vector2(2f, -2f);
+            outline.effectColor = new Color(1f, 1f, 1f, 0.25f);
+            outline.effectDistance = new Vector2(1.5f, -1.5f);
 
             return p;
         }
@@ -1597,7 +1642,16 @@ namespace UR3eVR
             le.flexibleWidth = 1f;
 
             Image img = btnObj.AddComponent<Image>();
-            img.material = stereoUIMaterial;
+            if (roundedRectSprite != null)
+            {
+                img.sprite = roundedRectSprite;
+                img.type = Image.Type.Sliced;
+                img.material = visionElementMaterial;
+            }
+            else
+            {
+                img.material = null;
+            }
             img.color = bgCol;
 
             Button btn = btnObj.AddComponent<Button>();
