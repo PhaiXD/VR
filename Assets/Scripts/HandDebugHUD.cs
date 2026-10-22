@@ -1,333 +1,240 @@
+using System;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace UR3eVR
 {
     /// <summary>
-    /// HandDebugHUD: แสดง GUI Debug Overlay บนจอ VR
-    /// แสดงสถานะ Hand Tracking, Pinch %, Force Gauge, bHaptics Glove, Webcam, และ 6-DOF Robot Arm Movement
+    /// HandDebugHUD: Stereoscopic VR HUD displaying real-time UR3e robot teleoperation telemetry.
+    /// - Replaces legacy OnGUI() with a World Space Canvas rendered in BOTH eyes (Single Pass Instanced).
+    /// - Follows peripheral headset view or attaches to tracking space cleanly.
+    /// - Displays XYZ target vs actual coordinates, bridge connection, grip force, and pause state.
     /// </summary>
     public class HandDebugHUD : MonoBehaviour
     {
         [Header("References")]
         public PinchDetector pinchDetector;
         public GripperBridge gripperBridge;
-        public BhapticsGloveFeedback bhapticsFeedback;
         public VRHandMover vrHandMover;
         public UR3eStarterPoint starterPoint;
         public SafetyBoundaryVisualizer safetyVisualizer;
         public script webcamScript;
+        public Transform centerEyeAnchor;
 
-        private GUIStyle headerStyle;
-        private GUIStyle labelStyle;
-        private GUIStyle subLabelStyle;
-        private GUIStyle warningStyle;
-        private bool stylesInitialized = false;
+        [Header("HUD Canvas Settings")]
+        public float hudDistance = 1.35f;
+        public float hudHeightOffset = -0.18f;
+        public float hudSideOffset = -0.42f; // Left peripheral view
+        public float followSpeed = 6.0f;
+
+        // UI GameObjects
+        private GameObject hudCanvasObj;
+        private Canvas hudCanvas;
+        private Text titleText;
+        private Text telemetryText;
+        private Text pauseBannerText;
+        private Text helpText;
+        private Image backgroundImage;
+        private Material stereoUIMat;
 
         private void Start()
         {
+            FindReferences();
+            BuildStereoHUDCanvas();
+        }
+
+        private void FindReferences()
+        {
             if (pinchDetector == null) pinchDetector = FindAnyObjectByType<PinchDetector>();
             if (gripperBridge == null) gripperBridge = FindAnyObjectByType<GripperBridge>();
-            if (bhapticsFeedback == null) bhapticsFeedback = FindAnyObjectByType<BhapticsGloveFeedback>();
             if (vrHandMover == null) vrHandMover = FindAnyObjectByType<VRHandMover>();
             if (starterPoint == null) starterPoint = FindAnyObjectByType<UR3eStarterPoint>();
             if (safetyVisualizer == null) safetyVisualizer = FindAnyObjectByType<SafetyBoundaryVisualizer>();
-            if (webcamScript == null) webcamScript = FindAnyObjectByType<script>();
+            if (webcamScript == null) webcamScript = FindAnyObjectByType<script>(FindObjectsInactive.Include);
+
+            if (centerEyeAnchor == null)
+            {
+                var cec = GameObject.Find("CenterEyeAnchor");
+                if (cec != null) centerEyeAnchor = cec.transform;
+                if (centerEyeAnchor == null && Camera.main != null) centerEyeAnchor = Camera.main.transform;
+            }
         }
 
-        private void InitStyles()
+        private void BuildStereoHUDCanvas()
         {
-            if (stylesInitialized) return;
-            stylesInitialized = true;
+            hudCanvasObj = new GameObject("StereoHandDebugHUD_Canvas");
+            hudCanvasObj.transform.SetParent(transform, false);
 
-            headerStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 16,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = Color.cyan }
-            };
+            hudCanvas = hudCanvasObj.AddComponent<Canvas>();
+            hudCanvas.renderMode = RenderMode.WorldSpace;
+            hudCanvasObj.AddComponent<CanvasScaler>();
 
-            labelStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 13,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = Color.white }
-            };
+            var gr = hudCanvasObj.AddComponent<GraphicRaycaster>();
 
-            subLabelStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 11,
-                normal = { textColor = new Color(0.8f, 0.8f, 0.8f) }
-            };
+            RectTransform canvasRT = hudCanvasObj.GetComponent<RectTransform>();
+            canvasRT.sizeDelta = new Vector2(480f, 320f);
+            canvasRT.localScale = Vector3.one * 0.0016f; // ~0.75m wide in VR
 
-            warningStyle = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 12,
-                fontStyle = FontStyle.Bold,
-                normal = { textColor = new Color(1f, 0.3f, 0.3f) }
-            };
+            Shader stereoShader = Shader.Find("UR3eVR/StereoUI") 
+                               ?? Shader.Find("UI/Default");
+            stereoUIMat = new Material(stereoShader);
+
+            // Background Panel
+            GameObject bgObj = new GameObject("Background");
+            bgObj.transform.SetParent(hudCanvasObj.transform, false);
+            RectTransform bgRT = bgObj.AddComponent<RectTransform>();
+            bgRT.anchorMin = Vector2.zero;
+            bgRT.anchorMax = Vector2.one;
+            bgRT.offsetMin = Vector2.zero;
+            bgRT.offsetMax = Vector2.zero;
+
+            backgroundImage = bgObj.AddComponent<Image>();
+            backgroundImage.material = stereoUIMat;
+            backgroundImage.color = new Color(0.04f, 0.07f, 0.12f, 0.88f);
+
+            var ol = bgObj.AddComponent<Outline>();
+            ol.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.40f);
+            ol.effectDistance = new Vector2(2, -2);
+
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font == null) font = Font.CreateDynamicFontFromOSFont("Arial", 16);
+
+            // Title
+            GameObject titleObj = new GameObject("Title");
+            titleObj.transform.SetParent(bgObj.transform, false);
+            RectTransform titleRT = titleObj.AddComponent<RectTransform>();
+            titleRT.anchorMin = new Vector2(0.04f, 0.86f);
+            titleRT.anchorMax = new Vector2(0.96f, 0.98f);
+            titleRT.offsetMin = Vector2.zero;
+            titleRT.offsetMax = Vector2.zero;
+
+            titleText = titleObj.AddComponent<Text>();
+            titleText.material = stereoUIMat;
+            titleText.font = font;
+            titleText.fontSize = 18;
+            titleText.fontStyle = FontStyle.Bold;
+            titleText.alignment = TextAnchor.MiddleLeft;
+            titleText.color = new Color(0.0f, 1.0f, 0.85f, 1.0f);
+            titleText.text = "UR3e TELEOPERATION TELEMETRY (STEREO)";
+
+            // Pause Banner
+            GameObject pauseObj = new GameObject("PauseBanner");
+            pauseObj.transform.SetParent(bgObj.transform, false);
+            RectTransform pauseRT = pauseObj.AddComponent<RectTransform>();
+            pauseRT.anchorMin = new Vector2(0.55f, 0.86f);
+            pauseRT.anchorMax = new Vector2(0.96f, 0.98f);
+            pauseRT.offsetMin = Vector2.zero;
+            pauseRT.offsetMax = Vector2.zero;
+
+            pauseBannerText = pauseObj.AddComponent<Text>();
+            pauseBannerText.material = stereoUIMat;
+            pauseBannerText.font = font;
+            pauseBannerText.fontSize = 16;
+            pauseBannerText.fontStyle = FontStyle.Bold;
+            pauseBannerText.alignment = TextAnchor.MiddleRight;
+            pauseBannerText.color = Color.yellow;
+            pauseBannerText.text = "";
+
+            // Main Telemetry Text
+            GameObject bodyObj = new GameObject("TelemetryText");
+            bodyObj.transform.SetParent(bgObj.transform, false);
+            RectTransform bodyRT = bodyObj.AddComponent<RectTransform>();
+            bodyRT.anchorMin = new Vector2(0.04f, 0.16f);
+            bodyRT.anchorMax = new Vector2(0.96f, 0.84f);
+            bodyRT.offsetMin = Vector2.zero;
+            bodyRT.offsetMax = Vector2.zero;
+
+            telemetryText = bodyObj.AddComponent<Text>();
+            telemetryText.material = stereoUIMat;
+            telemetryText.font = font;
+            telemetryText.fontSize = 13;
+            telemetryText.lineSpacing = 1.15f;
+            telemetryText.alignment = TextAnchor.UpperLeft;
+            telemetryText.color = Color.white;
+
+            // Help Footer
+            GameObject helpObj = new GameObject("HelpFooter");
+            helpObj.transform.SetParent(bgObj.transform, false);
+            RectTransform helpRT = helpObj.AddComponent<RectTransform>();
+            helpRT.anchorMin = new Vector2(0.04f, 0.02f);
+            helpRT.anchorMax = new Vector2(0.96f, 0.14f);
+            helpRT.offsetMin = Vector2.zero;
+            helpRT.offsetMax = Vector2.zero;
+
+            helpText = helpObj.AddComponent<Text>();
+            helpText.material = stereoUIMat;
+            helpText.font = font;
+            helpText.fontSize = 12;
+            helpText.alignment = TextAnchor.MiddleLeft;
+            helpText.color = new Color(0.6f, 0.85f, 1.0f, 0.85f);
+            helpText.text = "Left Remote: [X] Set Origin/Home | [Y] Pause/Resume | [L-Stick] Auto-Shake";
         }
 
-        private void OnGUI()
+        private void LateUpdate()
         {
-            InitStyles();
+            if (centerEyeAnchor == null) FindReferences();
 
-            GUILayout.BeginArea(new Rect(20, 20, 460, 740), GUI.skin.box);
-            GUILayout.Label("VR-HaptiLab | Hazardous Chemical Mixing", headerStyle);
-            GUILayout.Space(2);
-
-            // Left Remote Pause Status Banner
-            if (vrHandMover != null && vrHandMover.isTeleoperationPaused)
+            // Refresh World Camera for Stereo Rendering in Both Eyes
+            if (hudCanvas != null && centerEyeAnchor != null)
             {
-                GUI.color = new Color(1f, 0.45f, 0.15f);
-                GUILayout.Box("⏸️ ROBOT TELEOPERATION PAUSED\n(Press [Y] on Left Controller to resume motion)", warningStyle);
-                GUI.color = Color.white;
-                GUILayout.Space(3);
-            }
-
-            // Joint Rotation Limit Warning / Deceleration Banner (100% ENGLISH)
-            if (gripperBridge != null && gripperBridge.safetyRotLimitRatio > 0.05f)
-            {
-                float degLeft = gripperBridge.safetyRotLimitDegLeft;
-                string jointName = gripperBridge.safetyRotLimitJointName;
-                bool isDanger = gripperBridge.safetyRotLimitRatio >= 0.70f;
-                int remainingSpeedPct = Mathf.RoundToInt(Mathf.Clamp01(1f - gripperBridge.safetyRotLimitRatio) * 100f);
-
-                GUI.color = isDanger ? new Color(1f, 0.25f, 0.25f) : new Color(1f, 0.75f, 0.15f);
-                string title = isDanger ? "🛑 ROTATION LIMIT REACHED" : "⚠️ ROTATION LIMIT WARNING";
-                string warningMsg = string.Format(
-                    "{0}\nJoint: {1} nearing full rotation limit ({2:F1}° remaining)\nDecelerating speed to {3}% to protect joints & cables.\n👉 Rotate wrist in the opposite direction to continue.",
-                    title, jointName, degLeft, remainingSpeedPct
-                );
-                GUILayout.Box(warningMsg, warningStyle);
-                GUI.color = Color.white;
-                GUILayout.Space(3);
-            }
-
-            // Home engagement status banner
-            if (vrHandMover != null && !vrHandMover.isTrackingEngaged)
-            {
-                float dist = (starterPoint != null) ? starterPoint.distanceToHome * 100f : 0f;
-                GUI.color = new Color(1f, 0.85f, 0.2f);
-                GUILayout.Box(string.Format("👉 Please place hand at Home point to engage robot control\n   (Touch the cyan/green circle | {0:F1} cm away)", dist), warningStyle);
-                GUI.color = Color.white;
-                GUILayout.Space(4);
-            }
-            else
-            {
-                GUI.color = new Color(0.2f, 1f, 0.5f);
-                GUILayout.Label("✅ ROBOT ENGAGED (Tracking hand in real-time)", labelStyle);
-                GUI.color = Color.white;
-                GUILayout.Space(2);
-            }
-
-            // 1. HMD Status
-            bool hmdPresent = OVRManager.isHmdPresent;
-            bool userPresent = OVRManager.instance != null && OVRManager.instance.isUserPresent;
-
-            if (hmdPresent)
-            {
-                GUI.color = userPresent ? Color.green : Color.yellow;
-                GUILayout.Label(userPresent ? "[HMD] Active & Tracked" : "[HMD] Connected (Standby / Proximity Off)", labelStyle);
-            }
-            else
-            {
-                GUI.color = new Color(1f, 0.4f, 0.4f);
-                GUILayout.Label("[HMD] Not Detected / Quest Link Sleep", warningStyle);
-            }
-            GUI.color = Color.white;
-
-            // 2. Hand Tracking Status & Active Source
-            bool tracked = pinchDetector != null && pinchDetector.isTracked;
-            GUI.color = tracked ? Color.green : Color.yellow;
-            GUILayout.Label(tracked ? "[Hand Tracking] ACTIVE" : "[Hand Tracking] SEARCHING FOR HANDS...", labelStyle);
-            GUI.color = Color.white;
-
-            if (pinchDetector != null)
-            {
-                GUILayout.Label("Source: " + pinchDetector.trackingSource, subLabelStyle);
-                GUILayout.Label(string.Format("Finger Distance: {0:F1} cm | Pinch: {1:F0}%", pinchDetector.rawDistanceCm, pinchDetector.normalizedPinch * 100f), labelStyle);
-                bool isCalibrated = (pinchDetector.gripperPos <= 35) || (gripperBridge != null && gripperBridge.isCalibratedAtOpen);
-                string calibBadge = isCalibrated ? " [Auto-Calibrated]" : "";
-                GUI.color = isCalibrated ? Color.green : Color.white;
-                GUILayout.Label(string.Format("Gripper Target POS: {0} / 255{1}", pinchDetector.gripperPos, calibBadge), labelStyle);
-                GUI.color = Color.white;
-
-                // Visual pinch bar
-                Rect barRect = GUILayoutUtility.GetRect(400, 16);
-                GUI.Box(barRect, "");
-                float fillWidth = barRect.width * pinchDetector.normalizedPinch;
-                GUI.color = Color.Lerp(Color.cyan, Color.red, pinchDetector.normalizedPinch);
-                GUI.DrawTexture(new Rect(barRect.x, barRect.y, fillWidth, barRect.height), Texture2D.whiteTexture);
-                GUI.color = Color.white;
-            }
-
-            GUILayout.Space(4);
-
-            // 3. Robotiq Dynamic Force Feedback (0 N - 235 N)
-            if (gripperBridge != null)
-            {
-                float force = gripperBridge.actualGripForce;
-                string forceDesc;
-                Color forceColor;
-
-                if (force < 5.0f)
+                var cam = centerEyeAnchor.GetComponent<Camera>();
+                if (cam != null && hudCanvas.worldCamera != cam)
                 {
-                    forceDesc = "0.0 N (In Air)";
-                    forceColor = Color.gray;
-                }
-                else if (force < 45.0f)
-                {
-                    forceDesc = string.Format("{0:F1} N (Gentle Touch - Light Grip)", force);
-                    forceColor = Color.green;
-                }
-                else if (force < 95.0f)
-                {
-                    forceDesc = string.Format("{0:F1} N (Medium Grip)", force);
-                    forceColor = Color.yellow;
-                }
-                else if (force < 165.0f)
-                {
-                    forceDesc = string.Format("{0:F1} N (Firm Grip - Secure Hold)", force);
-                    forceColor = new Color(1f, 0.5f, 0f); // Orange
-                }
-                else
-                {
-                    forceDesc = string.Format("{0:F1} N (Max Force - Full Clamp)", force);
-                    forceColor = Color.red;
-                }
-
-                GUI.color = forceColor;
-                GUILayout.Label(string.Format("Actual Force: {0}", forceDesc), labelStyle);
-                GUI.color = Color.white;
-
-                // Visual force gauge bar (0 to 235 N)
-                Rect forceBarRect = GUILayoutUtility.GetRect(400, 16);
-                GUI.Box(forceBarRect, "");
-                float forceRatio = Mathf.Clamp01(force / 235.0f);
-                float forceFillWidth = forceBarRect.width * forceRatio;
-                GUI.color = forceColor;
-                GUI.DrawTexture(new Rect(forceBarRect.x, forceBarRect.y, forceFillWidth, forceBarRect.height), Texture2D.whiteTexture);
-                GUI.color = Color.white;
-
-                // bHaptics Glove Telemetry
-                if (bhapticsFeedback != null)
-                {
-                    bool isHaptic = bhapticsFeedback.isVibrating;
-                    GUI.color = isHaptic ? new Color(1f, 0.4f, 1f) : Color.gray;
-                    GUILayout.Label(string.Format("bHaptics Glove: {0} ({1}%) | Fz: {2:F1} N",
-                        isHaptic ? "VIBRATING" : "IDLE", bhapticsFeedback.currentMotorIntensity, bhapticsFeedback.currentGripForceN), labelStyle);
-                    GUI.color = Color.white;
-                }
-
-                GUILayout.Space(2);
-                GUI.color = gripperBridge.isConnected ? Color.green : new Color(1f, 0.4f, 0.4f);
-                GUILayout.Label(string.Format("Bridge: {0} ({1}:{2})", gripperBridge.isConnected ? "CONNECTED" : "OFFLINE", gripperBridge.serverIp, gripperBridge.serverPort), labelStyle);
-                GUI.color = Color.white;
-            }
-
-            // 4. VR Hand Mover (Robot Arm 6-DOF Target Pose / Velocity)
-            if (vrHandMover != null)
-            {
-                GUILayout.Space(4);
-                string speedStatus = (gripperBridge != null && gripperBridge.currentSpeedPct >= 200) ? "MAX ⚡ (Real-time)" : ((gripperBridge != null) ? (gripperBridge.currentSpeedPct + "%") : "100%");
-                
-                if (vrHandMover.trackingMode == VRTrackingMode.TargetPose)
-                {
-                    GUI.color = vrHandMover.isHandTracked ? Color.cyan : Color.yellow;
-                    GUILayout.Label(string.Format("Mode: TARGET POSE (Closed-Loop 6-DOF) | Speed: {0}", speedStatus), labelStyle);
-                    string filterBadge = (vrHandMover != null && vrHandMover.enableOneEuroFilter) ? "1€ Filter: ACTIVE (Smooth & Zero-Lag)" : "1€ Filter: OFF";
-                    string sigBadge = (gripperBridge != null) ? string.Format("Tx Rate: {0}Hz | Sig Δ: >={1:F1}mm, >={2:F1}° (Anti-Delay)", gripperBridge.sendRateHz, gripperBridge.posChangeThreshold * 1000f, gripperBridge.rotChangeThreshold) : "";
-                    GUI.color = (vrHandMover != null && vrHandMover.enableOneEuroFilter) ? Color.green : Color.gray;
-                    GUILayout.Label(filterBadge, subLabelStyle);
-                    if (!string.IsNullOrEmpty(sigBadge)) GUILayout.Label(sigBadge, subLabelStyle);
-                    if (starterPoint == null && vrHandMover != null) starterPoint = vrHandMover.starterPoint;
-                    string homeDistStr = (starterPoint != null && starterPoint.isAtHome) ? "★ AT HOME (0.0 cm)" : (starterPoint != null ? string.Format("{0:F1} cm from Home", starterPoint.distanceToHome * 100f) : "Active");
-                    GUI.color = (starterPoint != null && starterPoint.isAtHome) ? Color.green : Color.cyan;
-                    GUILayout.Label(string.Format("Starter Point: {0} | Home: [305, -131, 311] mm", homeDistStr), subLabelStyle);
-                    if (safetyVisualizer == null) safetyVisualizer = FindAnyObjectByType<SafetyBoundaryVisualizer>();
-                    if (safetyVisualizer != null)
-                    {
-                        GUI.color = new Color(0f, 0.85f, 1f);
-                        GUILayout.Label(string.Format("Robot Base (0,0,0): {0:F1} cm | Barrier: {1:F0} cm", safetyVisualizer.distToBase * 100f, safetyVisualizer.outerRadius * 100f), subLabelStyle);
-                        GUI.color = Color.white;
-                    }
-                    GUI.color = Color.white;
-                    GUI.color = Color.white;
-                    GUI.color = Color.white;
-
-                    Vector3 tgtMm = vrHandMover.currentTargetPos * 1000f;
-                    Vector3 actMm = (gripperBridge != null && gripperBridge.hasReceivedRobotPose) ? (gripperBridge.actualRobotPos * 1000f) : tgtMm;
-                    float posErrMm = Vector3.Distance(tgtMm, actMm);
-
-                    GUILayout.Label(string.Format("Target XYZ:  X:{0:F0}  Y:{1:F0}  Z:{2:F0} mm", tgtMm.x, tgtMm.y, tgtMm.z), subLabelStyle);
-                    GUILayout.Label(string.Format("Actual XYZ:  X:{0:F0}  Y:{1:F0}  Z:{2:F0} mm | Err: {3:F1} mm", actMm.x, actMm.y, actMm.z, posErrMm), subLabelStyle);
-
-                    Vector3 tgtRotDeg = vrHandMover.currentTargetRotAxisAngle * Mathf.Rad2Deg;
-                    Vector3 actRotDeg = (gripperBridge != null && gripperBridge.hasReceivedRobotPose) ? (gripperBridge.actualRobotRot * Mathf.Rad2Deg) : tgtRotDeg;
-                    GUILayout.Label(string.Format("Wrist Rot:   Rx:{0:F1}° Ry:{1:F1}° Rz:{2:F1}°", tgtRotDeg.x, tgtRotDeg.y, tgtRotDeg.z), subLabelStyle);
-
-                    if (GUILayout.Button("🎯 Recenter Anchor Hand [R]", GUILayout.Height(22)))
-                    {
-                        vrHandMover.RecenterAnchor();
-                    }
-                }
-                else
-                {
-                    bool armMoving = vrHandMover.isHandTracked && vrHandMover.mappedVelocity.sqrMagnitude > 0.00001f;
-                    bool armRotating = vrHandMover.isHandTracked && vrHandMover.mappedAngularVelocity.sqrMagnitude > 0.0001f;
-                    bool armActive = armMoving || armRotating;
-
-                    GUI.color = armActive ? Color.cyan : (vrHandMover.isHandTracked ? Color.green : Color.yellow);
-                    GUILayout.Label(string.Format("Speed: {0} | Arm 6-DOF: {1} | Tracked: {2}", speedStatus, armActive ? "ACTIVE" : "IDLE", vrHandMover.isHandTracked ? "YES" : "NO"), labelStyle);
-                    GUI.color = Color.white;
-
-                    string xDir = vrHandMover.mappedVelocity.x > 0.01f ? "FWD" : (vrHandMover.mappedVelocity.x < -0.01f ? "BACK" : "-");
-                    string yDir = vrHandMover.mappedVelocity.y > 0.01f ? "LEFT" : (vrHandMover.mappedVelocity.y < -0.01f ? "RIGHT" : "-");
-                    string zDir = vrHandMover.mappedVelocity.z > 0.01f ? "UP" : (vrHandMover.mappedVelocity.z < -0.01f ? "DOWN" : "-");
-                    GUILayout.Label(string.Format("Linear:  X:{0:+0.00;-0.00;0.00}[{3}] Y:{1:+0.00;-0.00;0.00}[{4}] Z:{2:+0.00;-0.00;0.00}[{5}]", 
-                        vrHandMover.mappedVelocity.x, vrHandMover.mappedVelocity.y, vrHandMover.mappedVelocity.z, xDir, yDir, zDir), subLabelStyle);
-
-                    string rollDir = vrHandMover.mappedAngularVelocity.x > 0.03f ? "CW" : (vrHandMover.mappedAngularVelocity.x < -0.03f ? "CCW" : "-");
-                    string pitchDir = vrHandMover.mappedAngularVelocity.y > 0.03f ? "UP" : (vrHandMover.mappedAngularVelocity.y < -0.03f ? "DOWN" : "-");
-                    string yawDir = vrHandMover.mappedAngularVelocity.z > 0.03f ? "LEFT" : (vrHandMover.mappedAngularVelocity.z < -0.03f ? "RIGHT" : "-");
-                    GUILayout.Label(string.Format("Angular: Roll:{0:+0.00;-0.00;0.00}[{3}] Pitch:{1:+0.00;-0.00;0.00}[{4}] Yaw:{2:+0.00;-0.00;0.00}[{5}]", 
-                        vrHandMover.mappedAngularVelocity.x, vrHandMover.mappedAngularVelocity.y, vrHandMover.mappedAngularVelocity.z, rollDir, pitchDir, yawDir), subLabelStyle);
+                    hudCanvas.worldCamera = cam;
                 }
             }
 
-            // 5. Webcam Feed & Camera Selector
-            if (webcamScript != null)
+            // Smooth Peripheral Billboard Placement
+            if (centerEyeAnchor != null && hudCanvasObj != null)
             {
-                GUILayout.Space(4);
-                GUI.color = webcamScript.IsStreaming ? Color.green : Color.yellow;
-                GUILayout.Label(string.Format("Webcam: [{0}/{1}] {2}", 
-                    webcamScript.CurrentDeviceIndex + 1, webcamScript.DeviceCount, webcamScript.CurrentDeviceName), labelStyle);
-                GUILayout.Label(string.Format("Status: {0} ({1})", 
-                    webcamScript.StatusDescription, webcamScript.CurrentResolution), subLabelStyle);
-                GUI.color = Color.white;
+                Vector3 headForward = centerEyeAnchor.forward;
+                headForward.y = 0f;
+                if (headForward.sqrMagnitude > 0.001f) headForward.Normalize();
+                else headForward = Vector3.forward;
 
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("◀ Prev Cam [V]", GUILayout.Height(24)))
-                {
-                    webcamScript.PrevCamera();
-                }
-                if (GUILayout.Button("Next Cam ▶ [C]", GUILayout.Height(24)))
-                {
-                    webcamScript.NextCamera();
-                }
-                GUILayout.EndHorizontal();
+                Vector3 headRight = Vector3.Cross(Vector3.up, headForward).normalized;
+
+                Vector3 targetPos = centerEyeAnchor.position
+                                  + headForward * hudDistance
+                                  + headRight * hudSideOffset
+                                  + Vector3.up * hudHeightOffset;
+
+                hudCanvasObj.transform.position = Vector3.Lerp(hudCanvasObj.transform.position, targetPos, Time.deltaTime * followSpeed);
+                hudCanvasObj.transform.rotation = Quaternion.LookRotation(hudCanvasObj.transform.position - centerEyeAnchor.position);
             }
 
-            if (!hmdPresent)
+            // Update Telemetry Display
+            UpdateTelemetryContent();
+        }
+
+        private void UpdateTelemetryContent()
+        {
+            if (telemetryText == null) return;
+
+            bool isPaused = vrHandMover != null && vrHandMover.isTeleoperationPaused;
+            if (pauseBannerText != null)
             {
-                GUILayout.Label("Note: Put on Quest headset to wake Link & tracking", warningStyle);
+                pauseBannerText.text = isPaused ? "[PAUSED - FROZEN]" : "[TRACKING ACTIVE]";
+                pauseBannerText.color = isPaused ? new Color(1f, 0.25f, 0.25f, 1f) : new Color(0.2f, 1f, 0.4f, 1f);
             }
 
-            GUILayout.Space(4);
-            GUI.color = new Color(0.7f, 0.9f, 1f);
-            GUILayout.Label("🎮 Left Remote: [X] Set Origin/Home | [Y] Pause/Resume | [L-Stick] Auto-Shake (3x)", subLabelStyle);
-            GUI.color = Color.white;
-            GUILayout.EndArea();
+            string bridgeStatus = (gripperBridge != null && gripperBridge.isConnected) ? "<color=#00FF88>CONNECTED</color>" : "<color=#FF4444>OFFLINE</color>";
+            string modeStatus = "CLOSED-LOOP 6-DOF POSE";
+
+            Vector3 tgtMm = (vrHandMover != null) ? vrHandMover.targetRobotPos * 1000f : Vector3.zero;
+            Vector3 actMm = (gripperBridge != null) ? gripperBridge.actualRobotPos * 1000f : Vector3.zero;
+            float posErrMm = Vector3.Distance(tgtMm, actMm);
+
+            string homeStatus = (starterPoint != null && starterPoint.isAtHome) ? "<color=#00FF88>READY AT HOME</color>" : "<color=#00D4FF>OFF-HOME</color>";
+            string pinchDesc = (pinchDetector != null) ? $"Pinch: {pinchDetector.normalizedPinch * 100f:F0}% ({pinchDetector.gripPositionMm:F1} mm)" : "Pinch: N/A";
+            string barrierDesc = (safetyVisualizer != null) ? $"Dist to Base: {safetyVisualizer.distToBase * 100f:F1} cm | Limit: {safetyVisualizer.outerRadius * 100f:F0} cm" : "";
+
+            telemetryText.text = 
+                $"Bridge: {bridgeStatus} | Mode: {modeStatus}\n" +
+                $"Starter Point: {homeStatus} | {barrierDesc}\n\n" +
+                $"<color=#00F0FF>Target XYZ:</color>  X:{tgtMm.x,5:F0}  Y:{tgtMm.y,5:F0}  Z:{tgtMm.z,5:F0} mm\n" +
+                $"<color=#00FF88>Actual XYZ:</color>  X:{actMm.x,5:F0}  Y:{actMm.y,5:F0}  Z:{actMm.z,5:F0} mm  (Err: {posErrMm:F1} mm)\n\n" +
+                $"{pinchDesc}";
         }
     }
 }

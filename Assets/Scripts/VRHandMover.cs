@@ -698,6 +698,7 @@ namespace UR3eVR
         public void ToggleTeleoperationPause()
         {
             isTeleoperationPaused = !isTeleoperationPaused;
+            if (gripperBridge != null) gripperBridge.SendPause(isTeleoperationPaused);
             if (isTeleoperationPaused)
             {
                 if (gripperBridge != null)

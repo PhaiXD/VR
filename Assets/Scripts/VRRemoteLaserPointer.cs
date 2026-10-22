@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -8,9 +8,9 @@ using UnityEngine.EventSystems;
 namespace UR3eVR
 {
     /// <summary>
-    /// VRRemoteLaserPointer: Laser pointer from Meta Quest Touch Remote (Left Hand LTouch)
-    /// - Emanates from Left Controller tip (LeftControllerAnchor)
-    /// - Always active and visible continuously
+    /// VRRemoteLaserPointer: Laser pointer continuously emanating from Meta Quest Touch Remote (Left Hand LTouch).
+    /// - Always active and vividly visible at all times
+    /// - Robust anchor tracking from LeftControllerAnchor / LeftHandAnchor
     /// - Magnetic Curved Snap (suction curve): curves toward UI buttons and grab bars
     /// - Front Index Trigger selects/clicks targeted UI buttons
     /// - Stereo Single Pass Instanced compatible
@@ -22,22 +22,22 @@ namespace UR3eVR
         [Header("Controller & Ray Settings")]
         [Tooltip("Controller to bind laser pointer to (Default: Left Hand LTouch)")]
         public OVRInput.Controller controller = OVRInput.Controller.LTouch;
-        public float maxRayLength = 3.5f;
-        public float tipForwardOffset = 0.055f;
-        public float tipUpOffset = 0.015f;
+        public float maxRayLength = 4.0f;
+        public float tipForwardOffset = 0.065f;
+        public float tipUpOffset = 0.018f;
 
         [Header("Magnetic Suction Snap Settings")]
         [Tooltip("Radius around UI buttons where laser curves and snaps to target (meters)")]
-        public float magneticSnapRadius = 0.25f;
+        public float magneticSnapRadius = 0.28f;
         [Tooltip("Max angle between controller forward and button to engage suction (degrees)")]
-        public float magneticMaxAngle = 18.0f;
+        public float magneticMaxAngle = 22.0f;
         [Tooltip("Speed of curve smoothing")]
-        public float snapSmoothSpeed = 18.0f;
+        public float snapSmoothSpeed = 20.0f;
 
         [Header("Colors & Styling")]
-        public Color normalLaserColor = new Color(0.0f, 0.90f, 1.0f, 0.90f);     // Bright Electric Cyan
-        public Color magneticLaserColor = new Color(0.0f, 1.0f, 0.70f, 1.0f);     // Suction Neon Aqua
-        public Color pressLaserColor = new Color(0.95f, 1.0f, 0.35f, 1.0f);       // Trigger Yellow
+        public Color normalLaserColor = new Color(0.0f, 1.0f, 1.0f, 0.95f);     // Vivid Electric Cyan (always visible)
+        public Color magneticLaserColor = new Color(0.0f, 1.0f, 0.75f, 1.0f);   // Neon Aqua Snap
+        public Color pressLaserColor = new Color(1.0f, 0.95f, 0.25f, 1.0f);     // Trigger Click Yellow
 
         [Header("References")]
         public Transform leftControllerAnchor;
@@ -51,7 +51,7 @@ namespace UR3eVR
         private Material reticleMaterial;
 
         // Curve Sampling Resolution
-        private const int CURVE_POINTS = 24;
+        private const int CURVE_POINTS = 28;
         private Vector3[] curvePoints = new Vector3[CURVE_POINTS];
 
         // State
@@ -83,8 +83,33 @@ namespace UR3eVR
         {
             if (leftControllerAnchor == null)
             {
-                var lca = GameObject.Find("LeftControllerAnchor");
-                if (lca != null) leftControllerAnchor = lca.transform;
+                // Search across root and nested objects
+                string[] possibleNames = new string[] {
+                    "LeftControllerAnchor", "LeftControllerInHandAnchor", "LeftHandAnchor", "LeftHandAnchorDetached"
+                };
+
+                foreach (var name in possibleNames)
+                {
+                    var found = GameObject.Find(name);
+                    if (found != null)
+                    {
+                        leftControllerAnchor = found.transform;
+                        break;
+                    }
+                }
+
+                if (leftControllerAnchor == null)
+                {
+                    var allTransforms = Resources.FindObjectsOfTypeAll<Transform>();
+                    foreach (var t in allTransforms)
+                    {
+                        if (t.name == "LeftControllerAnchor" || t.name == "LeftHandAnchor")
+                        {
+                            leftControllerAnchor = t;
+                            break;
+                        }
+                    }
+                }
             }
 
             if (headTransform == null)
@@ -113,20 +138,20 @@ namespace UR3eVR
             if (lineMaterial.HasProperty("_Color")) lineMaterial.SetColor("_Color", normalLaserColor);
 
             lineRenderer.material = lineMaterial;
-            lineRenderer.startWidth = 0.0040f;
-            lineRenderer.endWidth = 0.0015f;
+            lineRenderer.startWidth = 0.0075f; // 7.5mm start (crisp and clearly visible in VR)
+            lineRenderer.endWidth = 0.0035f;   // 3.5mm end
             lineRenderer.positionCount = CURVE_POINTS;
             lineRenderer.useWorldSpace = true;
             lineRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             lineRenderer.receiveShadows = false;
 
-            // Reticle Dot
+            // Reticle Disc
             reticleObj = new GameObject("VR_Laser_Reticle");
             reticleObj.transform.SetParent(transform, false);
 
             var mf = reticleObj.AddComponent<MeshFilter>();
             var mr = reticleObj.AddComponent<MeshRenderer>();
-            mf.mesh = CreateDiscMesh(0.016f, 32);
+            mf.mesh = CreateDiscMesh(0.018f, 32);
 
             reticleMaterial = new Material(stereoShader);
             reticleMaterial.name = "VR_Laser_ReticleMaterial";
@@ -136,7 +161,7 @@ namespace UR3eVR
             mr.material = reticleMaterial;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
-            reticleObj.SetActive(false);
+            reticleObj.SetActive(true);
         }
 
         private Mesh CreateDiscMesh(float radius, int segments)
@@ -167,7 +192,7 @@ namespace UR3eVR
 
         private void Update()
         {
-            // Laser pointer is ALWAYS ACTIVE on Left Hand
+            // Laser pointer is ALWAYS ACTIVE continuously on Left Hand
             isLaserActive = true;
 
             if (leftControllerAnchor == null || headTransform == null)
@@ -178,17 +203,14 @@ namespace UR3eVR
             Vector3 rayOrigin;
             Vector3 rayDir;
 
-            bool isRemoteTracked = leftControllerAnchor != null && 
-                (OVRInput.GetControllerPositionTracked(controller) || Application.isEditor || leftControllerAnchor.gameObject.activeInHierarchy);
-
-            if (isRemoteTracked && leftControllerAnchor != null)
+            if (leftControllerAnchor != null)
             {
                 rayOrigin = leftControllerAnchor.position + leftControllerAnchor.forward * tipForwardOffset + leftControllerAnchor.up * tipUpOffset;
                 rayDir = leftControllerAnchor.forward;
             }
             else if (headTransform != null)
             {
-                rayOrigin = headTransform.position + headTransform.forward * 0.12f + Vector3.down * 0.06f;
+                rayOrigin = headTransform.position + headTransform.forward * 0.15f + Vector3.down * 0.08f;
                 rayDir = headTransform.forward;
             }
             else
@@ -226,8 +248,8 @@ namespace UR3eVR
 
                 float totalDist = Vector3.Distance(rayOrigin, snapTargetPos);
                 Vector3 p0 = rayOrigin;
-                Vector3 p1 = rayOrigin + rayDir * (totalDist * 0.42f);
-                Vector3 p2 = snapTargetPos - snapTargetNormal * (totalDist * 0.22f);
+                Vector3 p1 = rayOrigin + rayDir * (totalDist * 0.40f);
+                Vector3 p2 = snapTargetPos - snapTargetNormal * (totalDist * 0.25f);
                 Vector3 p3 = snapTargetPos;
 
                 for (int i = 0; i < CURVE_POINTS; i++)
@@ -238,15 +260,15 @@ namespace UR3eVR
                 lineRenderer.SetPositions(curvePoints);
 
                 Color activeCol = isTriggerDownNow ? pressLaserColor : magneticLaserColor;
-                SetLaserColor(activeCol, 0.0050f, 0.0025f);
+                SetLaserColor(activeCol, 0.008f, 0.004f);
 
                 if (reticleObj != null)
                 {
                     reticleObj.SetActive(true);
                     reticleObj.transform.position = snapTargetPos + snapTargetNormal * 0.003f;
                     reticleObj.transform.rotation = Quaternion.LookRotation(snapTargetNormal, Vector3.up);
-                    float pulseScale = 1.0f + 0.12f * Mathf.Sin(Time.time * 8.0f);
-                    reticleObj.transform.localScale = Vector3.one * (pulseScale * (isTriggerDownNow ? 1.35f : 1.15f));
+                    float pulseScale = 1.0f + 0.15f * Mathf.Sin(Time.time * 8.0f);
+                    reticleObj.transform.localScale = Vector3.one * (pulseScale * (isTriggerDownNow ? 1.4f : 1.2f));
                     SetReticleColor(activeCol);
                 }
 
@@ -294,18 +316,17 @@ namespace UR3eVR
                 }
                 lineRenderer.SetPositions(curvePoints);
 
-                SetLaserColor(normalLaserColor, 0.0035f, 0.0012f);
+                // Always vivid and thick enough to be seen in VR against skybox
+                Color defaultCol = isTriggerDownNow ? pressLaserColor : normalLaserColor;
+                SetLaserColor(defaultCol, 0.0075f, 0.0035f);
 
                 if (reticleObj != null)
                 {
-                    reticleObj.SetActive(hasHit);
-                    if (hasHit)
-                    {
-                        reticleObj.transform.position = endPoint + hitNormal * 0.002f;
-                        reticleObj.transform.rotation = Quaternion.LookRotation(hitNormal, Vector3.up);
-                        reticleObj.transform.localScale = Vector3.one;
-                        SetReticleColor(normalLaserColor);
-                    }
+                    reticleObj.SetActive(true);
+                    reticleObj.transform.position = endPoint + hitNormal * 0.002f;
+                    reticleObj.transform.rotation = Quaternion.LookRotation(hitNormal, Vector3.up);
+                    reticleObj.transform.localScale = Vector3.one * (isTriggerDownNow ? 1.3f : 1.0f);
+                    SetReticleColor(defaultCol);
                 }
             }
 
@@ -331,7 +352,7 @@ namespace UR3eVR
                 Vector3 bPos = sel.transform.position;
                 Vector3 toButton = bPos - origin;
                 float forwardProj = Vector3.Dot(toButton, dir);
-                if (forwardProj < 0.15f || forwardProj > maxRayLength) continue;
+                if (forwardProj < 0.10f || forwardProj > maxRayLength) continue;
 
                 Vector3 rayPoint = origin + dir * forwardProj;
                 float perpDist = Vector3.Distance(rayPoint, bPos);
@@ -361,13 +382,13 @@ namespace UR3eVR
                 Vector3 dPos = drag.transform.position;
                 Vector3 toDrag = dPos - origin;
                 float forwardProj = Vector3.Dot(toDrag, dir);
-                if (forwardProj < 0.15f || forwardProj > maxRayLength) continue;
+                if (forwardProj < 0.10f || forwardProj > maxRayLength) continue;
 
                 Vector3 rayPoint = origin + dir * forwardProj;
                 float perpDist = Vector3.Distance(rayPoint, dPos);
                 float angle = Vector3.Angle(dir, toDrag);
 
-                if (perpDist <= magneticSnapRadius * 1.25f && angle <= magneticMaxAngle * 1.25f)
+                if (perpDist <= magneticSnapRadius * 1.3f && angle <= magneticMaxAngle * 1.3f)
                 {
                     float score = perpDist + angle * 0.01f;
                     if (score < bestScore)

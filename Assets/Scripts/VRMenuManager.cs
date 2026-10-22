@@ -497,7 +497,7 @@ namespace UR3eVR
                 Color bgCol = isActive ? new Color(0.0f, 0.45f, 0.40f, 0.95f) : new Color(0.12f, 0.16f, 0.24f, 0.95f);
                 Color textCol = isActive ? new Color(0.2f, 1.0f, 0.8f, 1.0f) : Color.white;
 
-                var btnObj = CreateSimpleButton(camButtonContainer, label, 42, bgCol, textCol, () =>
+                var btnObj = CreateSimpleButton(camButtonContainer, label, 46, bgCol, textCol, () =>
                 {
                     if (VRCameraWindow.Instance != null)
                     {
@@ -1573,6 +1573,10 @@ namespace UR3eVR
 
             RectTransform rt = btnObj.AddComponent<RectTransform>();
             rt.sizeDelta = new Vector2(0f, height);
+            var le = btnObj.AddComponent<LayoutElement>();
+            le.minHeight = height;
+            le.preferredHeight = height;
+            le.flexibleWidth = 1f;
 
             Image img = btnObj.AddComponent<Image>();
             img.material = stereoUIMaterial;
