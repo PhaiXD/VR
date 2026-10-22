@@ -5,65 +5,54 @@ using UnityEngine.UI;
 namespace UR3eVR
 {
     /// <summary>
-    /// VRWindowDragger: ระบบหยิบจับลากย้ายหน้าต่าง UI ในพื้นที่ 3D (Meta Horizon OS Style)
-    /// - รองรับการหยิบด้วย Remote: เล็ง Laser หรือนำรีโมทมาใกล้บาร์ แล้วกดปุ่ม Grip / Index Trigger ค้างเพื่อลาก
-    /// - รองรับการหยิบด้วยมือเปล่า (Hand Tracking): เอามือมาใกล้บาร์แล้วจีบมือ (Pinch) ค้างเพื่อลาก
-    /// - ปล่อยปุ่มหรือปล่อยมือเพื่อวางหน้าต่างไว้ในตำแหน่ง 3D นั้นทันที
+    /// VRWindowDragger: Allows repositioning World Space UI Windows ONLY with the Left Remote Controller.
+    /// Right Hand is 100% reserved for UR3e robot teleoperation and will NEVER drag or interfere with UI!
     /// </summary>
     public class VRWindowDragger : MonoBehaviour
     {
-        [Header("Targets")]
-        [Tooltip("Transform ของหน้าต่างที่ต้องการให้เคลื่อนที่ (ถ้าไม่ระบุ จะใช้ Parent)")]
+        [Header("Target Window")]
         public Transform windowTransform;
 
-        [Tooltip("Image ของ Grab Bar สำหรับเปลี่ยนสีสถานะ (Normal, Hover, Grabbed)")]
+        [Header("Grabbing Config")]
+        public float grabDistance = 0.35f;
         public Image handleImage;
+        public Color normalColor = new Color(0.0f, 0.70f, 0.85f, 0.75f);
+        public Color hoverColor = new Color(0.0f, 1.0f, 0.75f, 0.95f);
+        public Color grabbedColor = new Color(1.0f, 0.90f, 0.20f, 0.95f);
 
-        [Tooltip("ระยะตรวจจับการจับด้วยมือหรือรีโมท (เมตร)")]
-        public float grabDistance = 0.22f;
+        [Header("References")]
+        public Transform leftControllerAnchor;
+        public Transform headTransform;
 
-        [Header("Styling Colors")]
-        public Color normalColor = new Color(0.20f, 0.24f, 0.35f, 0.85f);
-        public Color hoverColor = new Color(0.0f, 0.85f, 1.0f, 0.95f);
-        public Color grabbedColor = new Color(0.05f, 0.95f, 0.55f, 1.0f);
+        public bool isGrabbed { get; private set; } = false;
+        public bool isHovered { get; private set; } = false;
 
-        [Header("State (Read Only)")]
-        public bool isGrabbed = false;
-        public bool isHovered = false;
-
-        private Transform grabberTransform = null;
+        private Transform grabberTransform;
         private Vector3 grabOffset;
         private Quaternion grabRotOffset;
-        private bool isHandGrab = false;
-
-        private PinchDetector pinchDetector;
-        private OVRHand rightHand;
-        private Transform rightControllerAnchor;
-        private Transform headTransform;
 
         private void Start()
         {
             if (windowTransform == null)
             {
-                windowTransform = transform.parent != null ? transform.parent : transform;
+                Canvas c = GetComponentInParent<Canvas>();
+                if (c != null) windowTransform = c.transform;
+                else windowTransform = transform.parent != null ? transform.parent : transform;
             }
+
             FindReferences();
         }
 
         private void FindReferences()
         {
-            if (pinchDetector == null) pinchDetector = FindAnyObjectByType<PinchDetector>();
-
-            var hands = FindObjectsByType<OVRHand>(FindObjectsSortMode.None);
-            foreach (var h in hands)
+            if (leftControllerAnchor == null)
             {
-                if (h.transform.name.ToLower().Contains("right")) rightHand = h;
-            }
-
-            if (rightControllerAnchor == null)
-            {
-                var rca = GameObject.Find("RightControllerAnchor");
-                if (rca != null) rightControllerAnchor = rca.transform;
+                string[] possibleNames = { "LeftControllerAnchor", "LeftControllerInHandAnchor", "LeftHandAnchor" };
+                foreach (var n in possibleNames)
+                {
+                    var found = GameObject.Find(n);
+                    if (found != null) { leftControllerAnchor = found.transform; break; }
+                }
             }
 
             if (headTransform == null)
@@ -76,7 +65,7 @@ namespace UR3eVR
 
         private void Update()
         {
-            if (rightControllerAnchor == null || pinchDetector == null) FindReferences();
+            if (leftControllerAnchor == null) FindReferences();
 
             if (isGrabbed)
             {
@@ -84,109 +73,50 @@ namespace UR3eVR
             }
             else
             {
-                CheckGrabInitiation();
+                CheckLeftRemoteNear();
             }
 
             UpdateHandleVisual();
         }
 
-        private void CheckGrabInitiation()
+        private void CheckLeftRemoteNear()
         {
-            Vector3 handlePos = transform.position;
-            bool hovering = false;
-
-            // 1. ตรวจสอบการจับจาก Remote Controller ขวา
-            bool controllerTracked = rightControllerAnchor != null && OVRInput.GetControllerPositionTracked(OVRInput.Controller.RTouch);
-            if (controllerTracked)
+            if (leftControllerAnchor == null)
             {
-                float distToRemote = Vector3.Distance(handlePos, rightControllerAnchor.position);
-                bool remoteNear = distToRemote <= grabDistance;
-
-                if (remoteNear || CheckLaserPointingHandle())
-                {
-                    hovering = true;
-
-                    bool gripPressed = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.RTouch) ||
-                                      OVRInput.Get(OVRInput.RawButton.RHandTrigger) ||
-                                      OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.RTouch);
-
-                    if (gripPressed)
-                    {
-                        StartGrab(rightControllerAnchor, false);
-                        return;
-                    }
-                }
+                isHovered = false;
+                return;
             }
 
-            // 2. ตรวจสอบการจับจากมือเปล่า (Hand Tracking)
-            if (rightHand != null && rightHand.IsTracked)
+            float dist = Vector3.Distance(transform.position, leftControllerAnchor.position);
+            isHovered = (dist <= grabDistance);
+
+            if (isHovered)
             {
-                Vector3 handPos = pinchDetector != null && pinchDetector.indexTipTransform != null
-                    ? pinchDetector.indexTipTransform.position
-                    : rightHand.transform.position;
+                bool leftGrip = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.LTouch)
+                             || OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.LTouch) > 0.4f;
 
-                float distToHand = Vector3.Distance(handlePos, handPos);
-                if (distToHand <= grabDistance)
+                if (leftGrip)
                 {
-                    hovering = true;
-
-                    bool isPinching = (pinchDetector != null && pinchDetector.normalizedPinch > 0.65f) ||
-                                      rightHand.GetFingerIsPinching(OVRHand.HandFinger.Index);
-
-                    if (isPinching)
-                    {
-                        Transform handT = pinchDetector != null && pinchDetector.indexTipTransform != null
-                            ? pinchDetector.indexTipTransform
-                            : rightHand.transform;
-                        StartGrab(handT, true);
-                        return;
-                    }
+                    StartGrab(leftControllerAnchor);
                 }
             }
-
-            isHovered = hovering;
         }
 
-        private bool CheckLaserPointingHandle()
-        {
-            if (rightControllerAnchor == null) return false;
-
-            Ray ray = new Ray(rightControllerAnchor.position, rightControllerAnchor.forward);
-            Plane p = new Plane(-transform.forward, transform.position);
-
-            if (p.Raycast(ray, out float enter) && enter <= 4.0f && enter > 0f)
-            {
-                Vector3 hitPoint = ray.GetPoint(enter);
-                Vector3 localHit = transform.InverseTransformPoint(hitPoint);
-                RectTransform rt = GetComponent<RectTransform>();
-                if (rt != null)
-                {
-                    Rect r = rt.rect;
-                    if (Mathf.Abs(localHit.x) <= r.width * 0.5f && Mathf.Abs(localHit.y) <= r.height * 0.5f)
-                    {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-                public void ToggleDirectGrab(Transform grabber = null)
+        public void ToggleDirectGrab(Transform grabber = null)
         {
             if (isGrabbed) EndGrab();
-            else StartGrab(grabber != null ? grabber : transform, false);
+            else StartGrab(grabber != null ? grabber : leftControllerAnchor);
         }
 
-        public void StartGrab(Transform grabber, bool byHand)
+        public void StartGrab(Transform grabber)
         {
-            isGrabbed = true;
-            isHandGrab = byHand;
-            grabberTransform = grabber;
+            if (grabber == null) grabber = leftControllerAnchor;
+            if (grabber == null) return;
 
+            isGrabbed = true;
+            grabberTransform = grabber;
             grabOffset = windowTransform.position - grabber.position;
             grabRotOffset = Quaternion.Inverse(grabber.rotation) * windowTransform.rotation;
-
-            TriggerHaptic(0.25f, 0.08f);
         }
 
         private void UpdateDragging()
@@ -197,33 +127,20 @@ namespace UR3eVR
                 return;
             }
 
-            if (isHandGrab)
+            bool stillHolding = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.LTouch)
+                             || OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch)
+                             || OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.LTouch) > 0.25f
+                             || Input.GetMouseButton(0);
+
+            if (!stillHolding)
             {
-                bool stillPinching = (pinchDetector != null && pinchDetector.normalizedPinch > 0.35f) ||
-                                     (rightHand != null && rightHand.IsTracked && rightHand.GetFingerIsPinching(OVRHand.HandFinger.Index));
-                if (!stillPinching)
-                {
-                    EndGrab();
-                    return;
-                }
-            }
-            else
-            {
-                bool stillHolding = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.RTouch) ||
-                                    OVRInput.Get(OVRInput.RawButton.RHandTrigger) ||
-                                    OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.RTouch) ||
-                                    Input.GetMouseButton(0);
-                if (!stillHolding)
-                {
-                    EndGrab();
-                    return;
-                }
+                EndGrab();
+                return;
             }
 
-            Vector3 targetPos = grabberTransform.position + grabberTransform.rotation * (Quaternion.Inverse(grabberTransform.rotation) * grabOffset);
+            Vector3 targetPos = grabberTransform.position + grabOffset;
             Quaternion targetRot = grabberTransform.rotation * grabRotOffset;
 
-            // หันหน้าต่างเข้าหาผู้ใช้ในแนวแกนราบ (Billboard Yaw)
             if (headTransform != null)
             {
                 Vector3 toHead = headTransform.position - windowTransform.position;
@@ -242,7 +159,6 @@ namespace UR3eVR
         {
             isGrabbed = false;
             grabberTransform = null;
-            TriggerHaptic(0.15f, 0.05f);
         }
 
         private void UpdateHandleVisual()
@@ -250,21 +166,8 @@ namespace UR3eVR
             if (handleImage == null) handleImage = GetComponent<Image>();
             if (handleImage == null) return;
 
-            Color targetColor = normalColor;
-            if (isGrabbed) targetColor = grabbedColor;
-            else if (isHovered) targetColor = hoverColor;
-
+            Color targetColor = isGrabbed ? grabbedColor : (isHovered ? hoverColor : normalColor);
             handleImage.color = Color.Lerp(handleImage.color, targetColor, Time.deltaTime * 15f);
-        }
-
-        private void TriggerHaptic(float amp, float dur)
-        {
-            try
-            {
-                OVRInput.SetControllerVibration(amp, amp, OVRInput.Controller.RTouch);
-                OVRInput.SetControllerVibration(amp, amp, OVRInput.Controller.LTouch);
-            }
-            catch { }
         }
     }
 }

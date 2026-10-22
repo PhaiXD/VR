@@ -491,6 +491,14 @@ namespace UR3eVR
             {
                 int deviceIdx = i;
                 string devName = devices[i].name;
+                string devLower = devName.ToLower();
+
+                // Filter out non-physical virtual drivers (Meta Quest 2, 3, Pro virtual capture)
+                if (devLower.Contains("meta quest") || devLower.Contains("virtual") || devLower.Contains("unity"))
+                {
+                    continue;
+                }
+
                 bool isActive = (i == activeIndex);
 
                 string label = isActive ? $"★ [ACTIVE] {deviceIdx}: {devName}" : $"📹 {deviceIdx}: {devName}";
@@ -1039,6 +1047,8 @@ namespace UR3eVR
             scrollRT.anchorMax = new Vector2(0.94f, 0.72f);
             scrollRT.offsetMin = Vector2.zero;
             scrollRT.offsetMax = Vector2.zero;
+
+            scrollObj.AddComponent<RectMask2D>();
 
             var vlg = scrollObj.AddComponent<VerticalLayoutGroup>();
             vlg.spacing = 10;

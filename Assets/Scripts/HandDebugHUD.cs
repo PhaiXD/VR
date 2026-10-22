@@ -75,8 +75,7 @@ namespace UR3eVR
             canvasRT.sizeDelta = new Vector2(480f, 320f);
             canvasRT.localScale = Vector3.one * 0.0016f; // ~0.75m wide in VR
 
-            Shader stereoShader = Shader.Find("UR3eVR/StereoUI") 
-                               ?? Shader.Find("UI/Default");
+            Shader stereoShader = Shader.Find("UR3eVR/StereoUI") ?? Shader.Find("UI/Default");
             stereoUIMat = new Material(stereoShader);
 
             // Background Panel

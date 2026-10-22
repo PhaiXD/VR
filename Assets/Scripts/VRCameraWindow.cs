@@ -205,16 +205,21 @@ namespace UR3eVR
             GameObject videoObj = new GameObject("VideoDisplay");
             videoObj.transform.SetParent(canvasObj.transform, false);
             RectTransform vidRT = videoObj.AddComponent<RectTransform>();
-            vidRT.anchorMin = new Vector2(0.03f, 0.14f);
-            vidRT.anchorMax = new Vector2(0.97f, 0.82f);
-            vidRT.offsetMin = Vector2.zero;
-            vidRT.offsetMax = Vector2.zero;
+            vidRT.anchorMin = new Vector2(0.04f, 0.14f);
+            vidRT.anchorMax = new Vector2(0.96f, 0.83f);
+            vidRT.pivot = new Vector2(0.5f, 0.5f);
+            vidRT.anchoredPosition = Vector2.zero;
+            vidRT.sizeDelta = Vector2.zero;
 
             videoRawImage = videoObj.AddComponent<RawImage>();
             videoRawImage.color = Color.white;
 
+            var arf = videoObj.AddComponent<AspectRatioFitter>();
+            arf.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+            arf.aspectRatio = 16f / 9f;
+
             // ISOLATED PRIVATE MATERIAL: Guarantees webcam texture NEVER leaks to other UI buttons!
-            Shader stShader = Shader.Find("UR3eVR/StereoUITexture")
+            Shader stShader = Shader.Find("UR3eVR/StereoUI") ?? Shader.Find("UR3eVR/StereoUITexture")
                            ?? Shader.Find("Universal Render Pipeline/Unlit")
                            ?? Shader.Find("Unlit/Texture");
             if (stShader != null)
@@ -457,7 +462,7 @@ namespace UR3eVR
                 liveDotImage.color = new Color(0.1f, 1.0f, 0.4f, alpha);
             }
 
-            CheckDirectHandPoke();
+            // Right hand poke removed (teleoperation safety)
         }
 
         private void CheckDirectHandPoke()
