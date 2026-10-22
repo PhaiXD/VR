@@ -133,6 +133,8 @@ namespace UR3eVR
         private bool tareRequested = false;
         private bool homeRequested = false;
         private bool shakeRequested = false;
+        private bool pauseRequested = false;
+        private bool pauseTargetState = false;
 
         // Internal
         private Thread networkThread;
@@ -364,19 +366,12 @@ namespace UR3eVR
         /// </summary>
         public void SendPause(bool isPaused)
         {
-            try
+            lock (lockObj)
             {
-                string cmd = isPaused ? "PAUSE 1\n" : "PAUSE 0\n";
-                if (client != null && client.Connected && stream != null)
-                {
-                    byte[] bytes = System.Text.Encoding.ASCII.GetBytes(cmd);
-                    stream.Write(bytes, 0, bytes.Length);
-                }
+                pauseTargetState = isPaused;
+                pauseRequested = true;
             }
-            catch (System.Exception ex)
-            {
-                Debug.LogWarning("[GripperBridge] SendPause error: " + ex.Message);
-            }
+            Debug.Log($"[GripperBridge] SendPause queued: {isPaused}");
         }
 
         private void StartNetworkThread()
@@ -517,6 +512,25 @@ namespace UR3eVR
                         {
                             byte[] shakeBytes = Encoding.ASCII.GetBytes("SHAKE\n");
                             stream.Write(shakeBytes, 0, shakeBytes.Length);
+                            stream.Flush();
+                        }
+
+                        // Send PAUSE command to UR3e robot
+                        bool shouldPause = false;
+                        bool sendPauseVal = false;
+                        lock (lockObj)
+                        {
+                            if (pauseRequested)
+                            {
+                                shouldPause = true;
+                                sendPauseVal = pauseTargetState;
+                                pauseRequested = false;
+                            }
+                        }
+                        if (shouldPause)
+                        {
+                            byte[] pauseBytes = Encoding.ASCII.GetBytes(sendPauseVal ? "PAUSE 1\n" : "PAUSE 0\n");
+                            stream.Write(pauseBytes, 0, pauseBytes.Length);
                             stream.Flush();
                         }
 
