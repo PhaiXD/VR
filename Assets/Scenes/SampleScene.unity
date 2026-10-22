@@ -135,7 +135,6 @@ GameObject:
   - component: {fileID: 100010384}
   - component: {fileID: 100010383}
   - component: {fileID: 100010382}
-  - component: {fileID: 100010389}
   - component: {fileID: 100010390}
   m_Layer: 0
   m_Name: '[BuildingBlock] Hand Tracking left'
@@ -318,19 +317,6 @@ MonoBehaviour:
   installationRoutineCheckpoint:
     _installationRoutineId: 
     _installationVariants: []
---- !u!114 &100010389
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 100010380}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0aaee0b66cb79cc4aab9ff34d68edacb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UR3eVR.VRHandStereoFixer
-  urpHandMaterial: {fileID: 0}
 --- !u!114 &100010390
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -347,8 +333,8 @@ MonoBehaviour:
   controller: 1
   gripWeight: 0
   blendSpeed: 12
-  ovrSkeleton: {fileID: 0}
-  ovrHand: {fileID: 0}
+  ovrSkeleton: {fileID: 100010386}
+  ovrHand: {fileID: 100010387}
 --- !u!21 &261680394
 Material:
   serializedVersion: 8
@@ -2293,6 +2279,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4593680705043960, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1877688810}
+    - targetCorrespondingSourceObject: {fileID: 4593680705043960, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2007910054}
     - targetCorrespondingSourceObject: {fileID: 487254, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1546900479}
@@ -2302,9 +2291,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4484591312116288, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1549311375}
-    - targetCorrespondingSourceObject: {fileID: 4484591312116288, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 2007910054}
     m_AddedComponents:
     - targetCorrespondingSourceObject: {fileID: 100004, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
       insertIndex: 1
@@ -2422,7 +2408,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0aaee0b66cb79cc4aab9ff34d68edacb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UR3eVR.VRHandStereoFixer
-  urpHandMaterial: {fileID: 0}
+  urpHandMaterial: {fileID: 2100000, guid: d1e2f3a4b5c60718293a4b5c6d7e8f99, type: 2}
 --- !u!1 &720482087
 GameObject:
   m_ObjectHideFlags: 0
@@ -2605,7 +2591,6 @@ GameObject:
   - component: {fileID: 960532786}
   - component: {fileID: 960532787}
   - component: {fileID: 960532788}
-  - component: {fileID: 960532789}
   - component: {fileID: 960532790}
   m_Layer: 0
   m_Name: '[BuildingBlock] Hand Tracking right'
@@ -3051,19 +3036,6 @@ MonoBehaviour:
   distToCenter: 0
   outerApproachAlpha: 0
   innerApproachAlpha: 0
---- !u!114 &960532789
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 960532774}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0aaee0b66cb79cc4aab9ff34d68edacb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UR3eVR.VRHandStereoFixer
-  urpHandMaterial: {fileID: 0}
 --- !u!114 &960532790
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3080,8 +3052,8 @@ MonoBehaviour:
   controller: 2
   gripWeight: 0
   blendSpeed: 12
-  ovrSkeleton: {fileID: 0}
-  ovrHand: {fileID: 0}
+  ovrSkeleton: {fileID: 960532780}
+  ovrHand: {fileID: 960532781}
 --- !u!1 &1129060816
 GameObject:
   m_ObjectHideFlags: 0
@@ -3465,7 +3437,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 11479374, guid: d9809c5e8418bb047bf2c8ba1d1a2cec, type: 3}
       propertyPath: m_showState
-      value: 0
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 11479374, guid: d9809c5e8418bb047bf2c8ba1d1a2cec, type: 3}
       propertyPath: m_controller
@@ -3824,7 +3796,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 11479374, guid: d9809c5e8418bb047bf2c8ba1d1a2cec, type: 3}
       propertyPath: m_showState
-      value: 0
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 11479374, guid: d9809c5e8418bb047bf2c8ba1d1a2cec, type: 3}
       propertyPath: m_controller
@@ -3951,7 +3923,7 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 690834945}
+  m_Father: {fileID: 1526677052}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!120 &2007910055
 LineRenderer:
@@ -4106,7 +4078,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3ddd886510c2fa347bc21409cdc49df5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UR3eVR.VRRemoteLaserPointer
-  controller: 2
+  controller: 1
   maxRayLength: 3
   tipForwardOffset: 0.055
   tipUpOffset: 0.015
@@ -4116,7 +4088,7 @@ MonoBehaviour:
   normalLaserColor: {r: 0, g: 0.9, b: 1, a: 0.9}
   magneticLaserColor: {r: 0, g: 1, b: 0.65, a: 1}
   pressLaserColor: {r: 0.95, g: 1, b: 0.35, a: 1}
-  rightControllerAnchor: {fileID: 0}
+  leftControllerAnchor: {fileID: 1526677052}
   headTransform: {fileID: 0}
   bhapticsFeedback: {fileID: 0}
   isLaserActive: 1
@@ -4164,7 +4136,6 @@ GameObject:
   m_Component:
   - component: {fileID: 2097284467}
   - component: {fileID: 2097284466}
-  - component: {fileID: 2097284468}
   m_Layer: 0
   m_Name: VRMenuManager
   m_TagString: Untagged
@@ -4272,19 +4243,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2097284468
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2097284465}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0aaee0b66cb79cc4aab9ff34d68edacb, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UR3eVR.VRHandStereoFixer
-  urpHandMaterial: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

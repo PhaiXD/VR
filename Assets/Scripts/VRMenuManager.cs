@@ -283,6 +283,20 @@ namespace UR3eVR
                 UpdateMainStatusText();
             }
 
+            // Single Pass Instanced: Continuously guarantee CenterEyeCamera on World Space Canvas
+            if (canvas != null && centerEyeCamera != null)
+            {
+                if (canvas.worldCamera != centerEyeCamera)
+                {
+                    canvas.worldCamera = centerEyeCamera;
+                }
+            }
+            else if (canvas != null && canvas.worldCamera == null)
+            {
+                FindReferences();
+                if (centerEyeCamera != null) canvas.worldCamera = centerEyeCamera;
+            }
+
             // Update Laser Pointer interaction
             UpdateLaserPointer();
 
@@ -442,14 +456,28 @@ namespace UR3eVR
             }
             dynamicCamButtons.Clear();
 
-            if (webcamScript == null) webcamScript = FindAnyObjectByType<script>();
+            if (webcamScript == null) webcamScript = FindAnyObjectByType<script>(FindObjectsInactive.Include);
 
             var devices = WebCamTexture.devices;
-            int activeIndex = (webcamScript != null) ? webcamScript.CurrentDeviceIndex : -1;
+            int activeIndex = -1;
+            string activeName = "None";
+
+            if (VRCameraWindow.Instance != null && VRCameraWindow.Instance.isOpen)
+            {
+                activeIndex = VRCameraWindow.Instance.currentCameraIndex;
+                if (devices != null && activeIndex >= 0 && activeIndex < devices.Length)
+                {
+                    activeName = devices[activeIndex].name;
+                }
+            }
+            else if (webcamScript != null)
+            {
+                activeIndex = webcamScript.CurrentDeviceIndex;
+                activeName = webcamScript.CurrentDeviceName;
+            }
 
             if (camStatusText != null)
             {
-                string activeName = (webcamScript != null) ? webcamScript.CurrentDeviceName : "None";
                 camStatusText.text = $"Streaming: {activeName} (Index: {activeIndex})";
             }
 
@@ -471,14 +499,20 @@ namespace UR3eVR
 
                 var btnObj = CreateSimpleButton(camButtonContainer, label, 42, bgCol, textCol, () =>
                 {
+                    if (VRCameraWindow.Instance != null)
+                    {
+                        VRCameraWindow.Instance.SetWindowOpen(true);
+                        VRCameraWindow.Instance.OpenWebcamIndex(deviceIdx);
+                        VRCameraWindow.Instance.RepositionWindowDefault();
+                    }
                     if (webcamScript != null)
                     {
                         webcamScript.OpenDeviceByIndex(deviceIdx);
-                        ShowToast($"Switched to Camera {deviceIdx}: {devName}");
-                        AddLog("CAMERA", $"Switched active camera to [{deviceIdx}] {devName}");
-                        HapticPulse(0.5f, 0.15f);
-                        PopulateCameraList(); // Refresh UI highlight
                     }
+                    ShowToast($"Switched to Camera {deviceIdx}: {devName}");
+                    AddLog("CAMERA", $"Switched active camera to [{deviceIdx}] {devName}");
+                    HapticPulse(0.5f, 0.15f);
+                    PopulateCameraList(); // Refresh UI highlight
                 });
 
                 dynamicCamButtons.Add(btnObj);

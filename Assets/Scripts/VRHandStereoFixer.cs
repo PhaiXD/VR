@@ -1,25 +1,14 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 namespace UR3eVR
 {
     /// <summary>
-    /// VRHandStereoFixer: แก้ปัญหาการมองไม่เห็นมือทั้งใน Editor และ Standalone Build (.exe ผ่าน Meta Horizon Link)
-    /// 
-    /// สาเหตุสำคัญที่ Build แล้วไม่เห็นมือ:
-    /// 1. Meta OVRMesh & OVRMeshRenderer Bug ใน Standalone Build:
-    ///    - เมต้าเขียนโค้ด Update() { ShouldInitialize(); } ครอบด้วย #if UNITY_EDITOR ไว้
-    ///    - ใน Standalone Build โค้ด Update() ดังกล่าวจึงถูกตัดออก (Stripped)
-    ///    - เมื่อเปิดเกมผ่าน Link ถ้า Hand Tracking ยัง Handshake ไม่เสร็จที่ Frame 0 (Start)
-    ///      OVRMesh และ OVRMeshRenderer จะไม่ถูก Initialize ตลอดกาล ทำให้โมเดลมือหายสนิท
-    ///    - สคริปต์นี้จะบังคับตรวจจับและเรียก Initialize() / ForceRebind() ทันทีที่ข้อมูลพร้อมใน Build
-    /// 
-    /// 2. OVRMeshRenderer _confidenceBehavior = ToggleRenderer:
-    ///    - เมื่อค่า Confidence ดรอปชั่วขณะ หรือเมื่อหยิบ Controller, OVRMeshRenderer จะปิด smr.enabled = false ทันที
-    ///    - สคริปต์นี้จะปลดล็อคให้เป็น ConfidenceBehavior.None เพื่อให้โมเดลมือแสดงผลต่อเนื่อง
-    /// 
-    /// 3. Single Pass Instanced Stereo Rendering:
-    ///    - บังคับใช้ URPHandOutline Shader พร้อม GPU Instancing และ Two-sided Rendering (Cull Off)
+    /// VRHandStereoFixer: Comprehensive Fix for Meta Quest Hand & Controller Tracking in Unity VR
+    /// - Guarantees hand mesh visibility in standalone builds (.exe & Link)
+    /// - Prevents phantom controller models: Only shows controller 3D mesh when actually in hand (ControllerInHand)
+    /// - Fixes Single Pass Instanced stereo rendering: ensures World Space Canvases and Text render in BOTH eyes
+    /// - Configures Left Hand Remote Laser Pointer and finger grip pose handlers
     /// </summary>
     public class VRHandStereoFixer : MonoBehaviour
     {
@@ -69,12 +58,15 @@ namespace UR3eVR
                 mgr.controllerDrivenHandPosesType = OVRManager.ControllerDrivenHandPosesType.ConformingToController;
             }
 
+            // CRITICAL FIX FOR PHANTOM CONTROLLERS:
+            // Use ControllerInHand so that the 3D controller model ONLY appears
+            // on the hand that is actually holding a physical remote!
             var helpers = FindObjectsByType<OVRControllerHelper>(FindObjectsSortMode.None);
             foreach (var h in helpers)
             {
-                if (h.m_showState != OVRInput.InputDeviceShowState.Always)
+                if (h.m_showState != OVRInput.InputDeviceShowState.ControllerInHand)
                 {
-                    h.m_showState = OVRInput.InputDeviceShowState.Always;
+                    h.m_showState = OVRInput.InputDeviceShowState.ControllerInHand;
                 }
                 if (!h.showWhenHandsArePoweredByNaturalControllerPoses)
                 {
@@ -103,13 +95,10 @@ namespace UR3eVR
                         urpHandMaterial.SetFloat("_Cull", 0f); // Two-sided
                     }
 
-                    // Crisp white/silver contour silhouette outline
                     if (urpHandMaterial.HasProperty("_ColorPrimary"))
                     {
                         urpHandMaterial.SetColor("_ColorPrimary", new Color(0.95f, 0.98f, 1.0f, 1.0f));
                     }
-
-                    // Translucent dark slate frosted glass hand body
                     if (urpHandMaterial.HasProperty("_ColorTop"))
                     {
                         urpHandMaterial.SetColor("_ColorTop", new Color(0.12f, 0.16f, 0.22f, 0.85f));
@@ -147,32 +136,7 @@ namespace UR3eVR
             {
                 if (omr == null) continue;
 
-                var ovrMesh = omr.GetComponent<OVRMesh>();
-                var ovrSkeleton = omr.GetComponent<OVRSkeleton>();
-
-                // 1. CRITICAL FIX FOR STANDALONE BUILDS:
-                // OVRMesh only checks ShouldInitialize() in Update() under #if UNITY_EDITOR!
-                // In a standalone build, if OVRMesh wasn't ready at frame 0 (Start), it never initializes!
-                // We force OVRMesh to initialize as soon as hand tracking connects over Link:
-                if (ovrMesh != null && !ovrMesh.IsInitialized)
-                {
-                    try
-                    {
-                        var mInit = typeof(OVRMesh).GetMethod("Initialize", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        if (mInit != null)
-                        {
-                            var fType = typeof(OVRMesh).GetField("_meshType", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                        var meshTypeVal = fType != null ? fType.GetValue(ovrMesh) : null;
-                        if (meshTypeVal != null)
-                        {
-                            mInit.Invoke(ovrMesh, new object[] { meshTypeVal });
-                        }
-                        }
-                    }
-                    catch { }
-                }
-
-                // 2. Prevent OVRMeshRenderer from hiding the hand when confidence fluctuates or controller is held
+                // 1. Prevent OVRMeshRenderer from hiding the hand when confidence fluctuates or controller is held
                 try
                 {
                     var confField = typeof(OVRMeshRenderer).GetField("_confidenceBehavior", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
@@ -183,16 +147,34 @@ namespace UR3eVR
                 }
                 catch { }
 
-                // 3. Force OVRMeshRenderer to bind mesh and skeleton
-                if (!omr.IsInitialized)
+                // 2. Prevent swapping to uninstanced system gesture material
+                try
                 {
-                    bool meshReady = ovrMesh != null && ovrMesh.IsInitialized;
-                    bool skeletonReady = ovrSkeleton == null || ovrSkeleton.IsInitialized;
-
-                    if (meshReady && skeletonReady)
+                    var gestField = typeof(OVRMeshRenderer).GetField("_systemGestureBehavior", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (gestField != null)
                     {
-                        omr.ForceRebind();
+                        gestField.SetValue(omr, OVRMeshRenderer.SystemGestureBehavior.None);
                     }
+                }
+                catch { }
+
+                // 3. Set original material reference to instanced URP material
+                try
+                {
+                    var origMatField = typeof(OVRMeshRenderer).GetField("_originalMaterial", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (origMatField != null && urpHandMaterial != null)
+                    {
+                        origMatField.SetValue(omr, urpHandMaterial);
+                    }
+                }
+                catch { }
+
+                // 4. Force bind mesh and skeleton once both are ready
+                var ovrMesh = omr.GetComponent<OVRMesh>();
+                var ovrSkeleton = omr.GetComponent<OVRSkeleton>();
+                if (!omr.IsInitialized && ovrMesh != null && ovrMesh.IsInitialized && ovrSkeleton != null && ovrSkeleton.IsInitialized)
+                {
+                    omr.ForceRebind();
                 }
             }
         }
@@ -268,10 +250,7 @@ namespace UR3eVR
                 }
             }
         }
-        /// <summary>
-        /// ตรวจสอบและบังคับ Canvas ใน World Space ทุกตัวให้ผูกกับ CenterEyeCamera 
-        /// และอัปเกรด TextMesh ทุกตัวให้ใช้ StereoTextShader เพื่อให้มองเห็นได้ทั้ง 2 ตา
-        /// </summary>
+
         public void FixStereoWorldCanvasesAndText()
         {
             if (centerEyeCamera == null || !centerEyeCamera.gameObject.activeInHierarchy)
@@ -283,13 +262,14 @@ namespace UR3eVR
 
             if (centerEyeCamera != null)
             {
-                var canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+                // Include inactive canvases (such as VRMenuManager when closed)
+                var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
                 foreach (var c in canvases)
                 {
                     if (c == null) continue;
                     if (c.renderMode == RenderMode.WorldSpace)
                     {
-                        if (c.worldCamera == null || !c.worldCamera.gameObject.activeInHierarchy)
+                        if (c.worldCamera != centerEyeCamera)
                         {
                             c.worldCamera = centerEyeCamera;
                         }
@@ -303,6 +283,7 @@ namespace UR3eVR
                 if (s != null)
                 {
                     stereoTextMaterial = new Material(s);
+                    stereoTextMaterial.name = "VR_StereoText_Material";
                     stereoTextMaterial.enableInstancing = true;
                 }
             }
@@ -329,12 +310,10 @@ namespace UR3eVR
                 }
             }
         }
-        /// <summary>
-        /// ตรวจสอบและติดตั้ง VRControllerGripPoseHandler บนมือทั้งสองข้าง
-        /// และติดตั้ง VRRemoteLaserPointer บน RightControllerAnchor โดยอัตโนมัติ
-        /// </summary>
+
         public void EnsureGripPoseAndLaserPointer()
         {
+            // Ensure VRControllerGripPoseHandler on both hands
             var hands = FindObjectsByType<OVRHand>(FindObjectsSortMode.None);
             foreach (var h in hands)
             {
@@ -347,15 +326,31 @@ namespace UR3eVR
                 }
             }
 
-            if (VRRemoteLaserPointer.Instance == null)
+            // CRITICAL: Ensure VRRemoteLaserPointer is on LEFT CONTROLLER ANCHOR
+            var lca = GameObject.Find("LeftControllerAnchor");
+            var laser = VRRemoteLaserPointer.Instance ?? FindAnyObjectByType<VRRemoteLaserPointer>();
+
+            if (laser == null)
             {
-                var laser = FindAnyObjectByType<VRRemoteLaserPointer>();
-                if (laser == null)
+                GameObject laserObj = new GameObject("VR_Remote_LaserPointer");
+                if (lca != null) laserObj.transform.SetParent(lca.transform, false);
+                laser = laserObj.AddComponent<VRRemoteLaserPointer>();
+                laser.controller = OVRInput.Controller.LTouch;
+                laser.leftControllerAnchor = lca != null ? lca.transform : null;
+            }
+            else
+            {
+                // Ensure properly parented to LeftControllerAnchor
+                if (lca != null && laser.transform.parent != lca.transform)
                 {
-                    var rca = GameObject.Find("RightControllerAnchor");
-                    GameObject laserObj = new GameObject("VR_Remote_LaserPointer");
-                    if (rca != null) laserObj.transform.SetParent(rca.transform, false);
-                    laser = laserObj.AddComponent<VRRemoteLaserPointer>();
+                    laser.transform.SetParent(lca.transform, false);
+                    laser.transform.localPosition = Vector3.zero;
+                    laser.transform.localRotation = Quaternion.identity;
+                }
+                laser.controller = OVRInput.Controller.LTouch;
+                if (laser.leftControllerAnchor == null && lca != null)
+                {
+                    laser.leftControllerAnchor = lca.transform;
                 }
             }
         }

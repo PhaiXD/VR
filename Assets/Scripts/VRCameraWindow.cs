@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -6,24 +6,25 @@ using UnityEngine.UI;
 namespace UR3eVR
 {
     /// <summary>
-    /// VRCameraWindow: หน้าต่างแสดงภาพกล้อง Webcam แบบลอยตัวสไตล์ Meta Horizon OS
-    /// - เปิดแสดงผลอัตโนมัติตั้งแต่เริ่มระบบ (Auto-start on startup)
-    /// - แสดงภาพสตรีม 16:9 คมชัด พร้อม Badge สด 🟢 LIVE, ชื่อกล้อง, และ Resolution
-    /// - มีแถบ Grab Bar ด้านล่างสำหรับหยิบจับลากย้ายตำแหน่งใน 3D Space (รองรับทั้งรีโมทและมือเปล่า)
-    /// - ปุ่มควบคุม (Switch Cam, Close) กดได้ทั้งยิงเลเซอร์จากรีโมท และใช้นิ้วจิ้มตรงๆ จากมือ (Direct Poke)
+    /// VRCameraWindow: Floating Horizon OS Style Webcam Monitor for Meta Quest VR
+    /// - Auto-starts on startup in front of user
+    /// - Dedicated private material instance (NEVER pollutes Graphic.defaultGraphicMaterial / other UI buttons)
+    /// - CenterEyeAnchor Canvas worldCamera tracking for Single Pass Instanced stereo rendering
+    /// - Grab Bar for positioning in 3D Space
+    /// - Switch Camera & Close Header buttons
     /// </summary>
     public class VRCameraWindow : MonoBehaviour
     {
         public static VRCameraWindow Instance { get; private set; }
 
         [Header("Camera Configuration")]
-        [Tooltip("ความกว้างของหน้าจอใน VR (เมตร)")]
+        [Tooltip("Width of window in meters")]
         public float windowWidthMeters = 0.65f;
 
-        [Tooltip("ความสูงของหน้าจอใน VR (เมตร)")]
+        [Tooltip("Height of window in meters")]
         public float windowHeightMeters = 0.44f;
 
-        [Tooltip("ระยะห่างเริ่มต้นจากสายตา (เมตร)")]
+        [Tooltip("Distance in front of user on spawn")]
         public float defaultDistance = 1.05f;
 
         [Header("State")]
@@ -40,14 +41,18 @@ namespace UR3eVR
         private GameObject grabBarObj;
         private VRWindowDragger dragger;
 
+        // Dedicated private material instance to prevent texture pollution
+        private Material privateVideoMaterial;
+
         // Webcam runtime
         private WebCamTexture webcamTexture;
-        private WebCamDevice[] availableDevices;
+        public WebCamDevice[] availableDevices { get; private set; }
         private Font uiFont;
 
         // References
         private Camera centerEyeCamera;
         private Transform rightControllerAnchor;
+        private Transform leftControllerAnchor;
         private PinchDetector pinchDetector;
 
         // Poke Debounce
@@ -72,7 +77,6 @@ namespace UR3eVR
             BuildCameraWindowUI();
             InitializeWebcam();
 
-            // เริ่มต้นเปิดแสดงผลทันทีตามที่ผู้ใช้ต้องการ
             SetWindowOpen(true);
         }
 
@@ -83,6 +87,12 @@ namespace UR3eVR
                 var cec = GameObject.Find("CenterEyeAnchor");
                 if (cec != null) centerEyeCamera = cec.GetComponent<Camera>();
                 if (centerEyeCamera == null && Camera.main != null) centerEyeCamera = Camera.main;
+            }
+
+            if (leftControllerAnchor == null)
+            {
+                var lca = GameObject.Find("LeftControllerAnchor");
+                if (lca != null) leftControllerAnchor = lca.transform;
             }
 
             if (rightControllerAnchor == null)
@@ -125,6 +135,7 @@ namespace UR3eVR
 
             // 1. Frosted Obsidian Glass Background Card
             Image bgImg = canvasObj.AddComponent<Image>();
+            bgImg.material = null; // Clean default
             bgImg.color = new Color(0.07f, 0.08f, 0.12f, 0.92f);
 
             Outline bgOutline = canvasObj.AddComponent<Outline>();
@@ -141,6 +152,7 @@ namespace UR3eVR
             hRT.offsetMax = Vector2.zero;
 
             Image hImg = header.AddComponent<Image>();
+            hImg.material = null;
             hImg.color = new Color(0.04f, 0.05f, 0.08f, 0.98f);
 
             // 2.1 Live Indicator Dot
@@ -151,6 +163,7 @@ namespace UR3eVR
             dotRT.anchorMax = new Vector2(0.03f, 0.35f);
             dotRT.sizeDelta = new Vector2(12f, 12f);
             liveDotImage = liveDot.AddComponent<Image>();
+            liveDotImage.material = null;
             liveDotImage.color = new Color(0.1f, 1.0f, 0.4f, 1.0f);
 
             // 2.2 Title & Subtitle Texts
@@ -200,12 +213,20 @@ namespace UR3eVR
             videoRawImage = videoObj.AddComponent<RawImage>();
             videoRawImage.color = Color.white;
 
-            Shader stShader = Shader.Find("UR3eVR/StereoUITexture");
+            // ISOLATED PRIVATE MATERIAL: Guarantees webcam texture NEVER leaks to other UI buttons!
+            Shader stShader = Shader.Find("UR3eVR/StereoUITexture")
+                           ?? Shader.Find("Universal Render Pipeline/Unlit")
+                           ?? Shader.Find("Unlit/Texture");
             if (stShader != null)
             {
-                Material vidMat = new Material(stShader);
-                vidMat.enableInstancing = true;
-                videoRawImage.material = vidMat;
+                privateVideoMaterial = new Material(stShader);
+                privateVideoMaterial.name = "VRCamera_IsolatedVideoMat";
+                privateVideoMaterial.enableInstancing = true;
+                videoRawImage.material = privateVideoMaterial;
+            }
+            else
+            {
+                videoRawImage.material = null;
             }
 
             // Video Border Frame
@@ -223,6 +244,7 @@ namespace UR3eVR
             grabRT.offsetMax = Vector2.zero;
 
             Image grabImg = grabBarObj.AddComponent<Image>();
+            grabImg.material = null;
             grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
 
             Outline grabOutline = grabBarObj.AddComponent<Outline>();
@@ -265,6 +287,7 @@ namespace UR3eVR
             rt.offsetMax = Vector2.zero;
 
             Image img = btnObj.AddComponent<Image>();
+            img.material = null; // Clean default
             img.color = bgCol;
 
             Button btn = btnObj.AddComponent<Button>();
@@ -305,11 +328,11 @@ namespace UR3eVR
             Vector3 fwd = Vector3.ProjectOnPlane(refT.forward, Vector3.up).normalized;
             if (fwd.sqrMagnitude < 0.01f) fwd = refT.forward;
 
-            // วางลอยด้านหน้าทางขวาเล็กน้อยที่ระดับสายตา ไม่บดบังพื้นที่ทำงานตรงกลาง
+            // Place in upper right peripheral view (42cm right, 10cm up)
             canvasObj.transform.position = refT.position + fwd * defaultDistance + refT.right * 0.42f + Vector3.up * 0.10f;
             canvasObj.transform.rotation = Quaternion.LookRotation(fwd, Vector3.up);
 
-            if (canvas != null && canvas.worldCamera == null && centerEyeCamera != null)
+            if (canvas != null && centerEyeCamera != null)
             {
                 canvas.worldCamera = centerEyeCamera;
             }
@@ -321,12 +344,12 @@ namespace UR3eVR
             if (availableDevices == null || availableDevices.Length == 0)
             {
                 if (subtitleText != null) subtitleText.text = "No Physical Webcam Detected";
-                if (liveDotImage != null) liveDotImage.color = new Color(1f, 0.7f, 0.1f, 1f); // Yellow standby
+                if (liveDotImage != null) liveDotImage.color = new Color(1f, 0.7f, 0.1f, 1f);
                 return;
             }
 
             int selected = 0;
-            // เลือกกล้องที่ชื่อไม่ใช่อุปกรณ์เสมือน (Quest Virtual)
+            // Prefer real USB webcams over Quest virtual cameras
             for (int i = 0; i < availableDevices.Length; i++)
             {
                 string n = availableDevices[i].name.ToLower();
@@ -357,11 +380,18 @@ namespace UR3eVR
                 if (videoRawImage != null)
                 {
                     videoRawImage.texture = webcamTexture;
-                    if (videoRawImage.material != null)
+                    if (privateVideoMaterial != null)
                     {
-                        videoRawImage.material.mainTexture = webcamTexture;
+                        privateVideoMaterial.mainTexture = webcamTexture;
                     }
                 }
+
+                // Clean defaultGraphicMaterial to prevent contamination of other UI buttons
+                if (Graphic.defaultGraphicMaterial.mainTexture != null)
+                {
+                    Graphic.defaultGraphicMaterial.mainTexture = null;
+                }
+
                 webcamTexture.Play();
 
                 if (titleText != null) titleText.text = $"Camera [{currentCameraIndex + 1}/{availableDevices.Length}]";
@@ -396,17 +426,20 @@ namespace UR3eVR
         {
             if (!isOpen) return;
 
-            // ตรวจสอบและผูก CenterEyeCamera กับ World Space Canvas ต่อเนื่อง (แก้ไขภาพไม่ขึ้นตาขวา)
-            if (canvas != null && (canvas.worldCamera == null || !canvas.worldCamera.gameObject.activeInHierarchy))
+            // Single Pass Instanced: Continuously guarantee CenterEyeCamera on World Space Canvas
+            if (canvas != null && centerEyeCamera != null)
             {
-                FindReferences();
-                if (centerEyeCamera != null)
+                if (canvas.worldCamera != centerEyeCamera)
                 {
                     canvas.worldCamera = centerEyeCamera;
                 }
             }
+            else if (canvas != null && canvas.worldCamera == null)
+            {
+                FindReferences();
+                if (centerEyeCamera != null) canvas.worldCamera = centerEyeCamera;
+            }
 
-            // จัดตำแหน่งลอยหน้าผู้ใช้เมื่อ VR Camera เริ่มทำงาน
             if (!hasPositionedDefault)
             {
                 FindReferences();
@@ -424,7 +457,6 @@ namespace UR3eVR
                 liveDotImage.color = new Color(0.1f, 1.0f, 0.4f, alpha);
             }
 
-            // Direct Hand Poke Interaction (ตรวจจับการใช้นิ้วจิ้มปุ่มโดยตรง)
             CheckDirectHandPoke();
         }
 
@@ -445,16 +477,14 @@ namespace UR3eVR
                 Vector3 localPos = rt.InverseTransformPoint(fingerPos);
                 Rect r = rt.rect;
 
-                // ตรวจว่าปลายนิ้วอยู่ในกรอบปุ่ม และระยะลึกใกล้ระนาบปุ่ม (< 2.5 ซม.)
                 if (r.Contains(new Vector2(localPos.x, localPos.y)) && Mathf.Abs(localPos.z) <= 0.025f)
                 {
                     btn.onClick.Invoke();
                     lastPokeTime = Time.time;
 
-                    // Haptic feedback
                     try
                     {
-                        OVRInput.SetControllerVibration(0.3f, 0.3f, OVRInput.Controller.RTouch);
+                        OVRInput.SetControllerVibration(0.3f, 0.3f, OVRInput.Controller.LTouch);
                     }
                     catch { }
 

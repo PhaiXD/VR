@@ -171,7 +171,13 @@ namespace UR3eVR
             return false;
         }
 
-        private void StartGrab(Transform grabber, bool byHand)
+                public void ToggleDirectGrab(Transform grabber = null)
+        {
+            if (isGrabbed) EndGrab();
+            else StartGrab(grabber != null ? grabber : transform, false);
+        }
+
+        public void StartGrab(Transform grabber, bool byHand)
         {
             isGrabbed = true;
             isHandGrab = byHand;
@@ -232,7 +238,7 @@ namespace UR3eVR
             windowTransform.rotation = Quaternion.Slerp(windowTransform.rotation, targetRot, Time.deltaTime * 20f);
         }
 
-        private void EndGrab()
+        public void EndGrab()
         {
             isGrabbed = false;
             grabberTransform = null;
