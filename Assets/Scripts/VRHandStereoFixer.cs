@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 namespace UR3eVR
@@ -331,6 +331,16 @@ namespace UR3eVR
                         if (c.worldCamera != centerEyeCamera)
                         {
                             c.worldCamera = centerEyeCamera;
+                        }
+
+                        // Enable GPU instancing on all UI Image materials for SPI stereo
+                        var images = c.GetComponentsInChildren<Image>(true);
+                        foreach (var img in images)
+                        {
+                            if (img != null && img.material != null && !img.material.enableInstancing)
+                            {
+                                img.material.enableInstancing = true;
+                            }
                         }
                     }
                 }

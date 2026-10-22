@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -1063,7 +1063,7 @@ namespace UR3eVR
             statRT.offsetMax = Vector2.zero;
 
             statusText = statObj.AddComponent<Text>();
-            statusText.material = stereoUIMaterial;
+            statusText.material = null;
             statusText.font = uiFont;
             statusText.fontSize = 15;
             statusText.alignment = TextAnchor.MiddleCenter;
@@ -1079,7 +1079,7 @@ namespace UR3eVR
             toastRT.offsetMax = Vector2.zero;
 
             Image tImg = toastObj.AddComponent<Image>();
-            tImg.material = stereoUIMaterial;
+            tImg.material = null;
             tImg.color = new Color(0.0f, 0.5f, 0.3f, 0.95f);
             toastText = CreateText(toastObj.transform, "", 16, Color.white, TextAnchor.MiddleCenter);
             toastObj.SetActive(false);
@@ -1097,7 +1097,7 @@ namespace UR3eVR
             subRT.offsetMin = Vector2.zero;
             subRT.offsetMax = Vector2.zero;
             camStatusText = subObj.AddComponent<Text>();
-            camStatusText.material = stereoUIMaterial;
+            camStatusText.material = null;
             camStatusText.font = uiFont;
             camStatusText.fontSize = 16;
             camStatusText.alignment = TextAnchor.MiddleLeft;
@@ -1153,7 +1153,7 @@ namespace UR3eVR
             abRT.offsetMax = Vector2.zero;
 
             alertBannerImage = alertBannerObj.AddComponent<Image>();
-            alertBannerImage.material = stereoUIMaterial;
+            alertBannerImage.material = null; // stereo-safe
             alertBannerImage.color = new Color(0.95f, 0.70f, 0.05f, 0.95f);
             alertBannerText = CreateText(alertBannerObj.transform, "[!] SYSTEM ALERT", 16, Color.black, TextAnchor.MiddleCenter);
             alertBannerText.fontStyle = FontStyle.Bold;
@@ -1168,7 +1168,7 @@ namespace UR3eVR
             scrollRT.offsetMax = Vector2.zero;
 
             Image scBg = scrollObj.AddComponent<Image>();
-            scBg.material = stereoUIMaterial;
+            scBg.material = null; // stereo-safe
             scBg.color = new Color(0.03f, 0.04f, 0.06f, 0.95f);
             scrollObj.AddComponent<Mask>().showMaskGraphic = true;
 
@@ -1186,7 +1186,7 @@ namespace UR3eVR
             contentRT.offsetMax = new Vector2(-12f, -12f);
 
             logContentText = contentObj.AddComponent<Text>();
-            logContentText.material = stereoUIMaterial;
+            logContentText.material = null; // stereo-safe
             logContentText.font = uiFont;
             logContentText.fontSize = 14;
             logContentText.lineSpacing = 1.15f;
@@ -1308,7 +1308,7 @@ namespace UR3eVR
             aRT.offsetMax = Vector2.zero;
 
             Image aImg = activeCard.AddComponent<Image>();
-            aImg.material = stereoUIMaterial;
+            aImg.material = null;
             aImg.color = new Color(0.06f, 0.12f, 0.20f, 0.95f);
 
             Outline aOl = activeCard.AddComponent<Outline>();
@@ -1355,7 +1355,7 @@ namespace UR3eVR
             piRT.offsetMax = Vector2.zero;
 
             bgPageIndicatorText = piObj.AddComponent<Text>();
-            bgPageIndicatorText.material = stereoUIMaterial;
+            bgPageIndicatorText.material = null;
             bgPageIndicatorText.font = uiFont;
             bgPageIndicatorText.fontSize = 15;
             bgPageIndicatorText.fontStyle = FontStyle.Bold;
@@ -1391,7 +1391,7 @@ namespace UR3eVR
             rt.offsetMax = Vector2.zero;
 
             Image img = btnObj.AddComponent<Image>();
-            img.material = stereoUIMaterial;
+            img.material = null;
             img.color = new Color(0.16f, 0.22f, 0.32f, 0.95f);
 
             Button btn = btnObj.AddComponent<Button>();
@@ -1462,7 +1462,7 @@ namespace UR3eVR
                 btnObj.transform.SetParent(bgGridContainer.transform, false);
 
                 Image img = btnObj.AddComponent<Image>();
-                img.material = stereoUIMaterial;
+                img.material = null; // stereo-safe
                 img.color = isActive 
                     ? new Color(0.06f, 0.30f, 0.36f, 0.98f) 
                     : new Color(0.10f, 0.14f, 0.22f, 0.95f);
@@ -1579,7 +1579,7 @@ namespace UR3eVR
             hRT.offsetMax = Vector2.zero;
 
             Image hImg = header.AddComponent<Image>();
-            hImg.material = stereoUIMaterial;
+            hImg.material = null; // null = UI/Default shader = renders in BOTH eyes under SPI
             hImg.color = new Color(0.03f, 0.05f, 0.08f, 0.98f);
 
             if (onBack != null)
@@ -1593,11 +1593,12 @@ namespace UR3eVR
                 bRT.offsetMax = Vector2.zero;
 
                 Image bImg = backObj.AddComponent<Image>();
-                bImg.material = stereoUIMaterial;
+                bImg.material = null;
                 bImg.color = new Color(0.2f, 0.25f, 0.35f, 0.9f);
 
                 Button bBtn = backObj.AddComponent<Button>();
                 bBtn.onClick.AddListener(() => onBack());
+                allMenuButtons.Add(bBtn);
 
                 CreateText(backObj.transform, "â—€ Back", 14, Color.white, TextAnchor.MiddleCenter);
             }
@@ -1611,7 +1612,7 @@ namespace UR3eVR
             tRT.offsetMax = Vector2.zero;
 
             Text titleText = titleObj.AddComponent<Text>();
-            titleText.material = stereoUIMaterial;
+            titleText.material = null;
             titleText.font = uiFont;
             titleText.fontSize = 20;
             titleText.fontStyle = FontStyle.Bold;
@@ -1629,11 +1630,12 @@ namespace UR3eVR
             cRT.offsetMax = Vector2.zero;
 
             Image cImg = closeObj.AddComponent<Image>();
-            cImg.material = stereoUIMaterial;
+            cImg.material = null;
             cImg.color = new Color(0.75f, 0.15f, 0.15f, 0.95f);
 
             Button cBtn = closeObj.AddComponent<Button>();
             cBtn.onClick.AddListener(() => onClose());
+            allMenuButtons.Add(cBtn);
 
             Text xText = CreateText(closeObj.transform, "âœ•", 20, Color.white, TextAnchor.MiddleCenter);
             xText.fontStyle = FontStyle.Bold;
@@ -1694,7 +1696,7 @@ namespace UR3eVR
             rt.offsetMax = Vector2.zero;
 
             Text txt = txtObj.AddComponent<Text>();
-            txt.material = stereoUIMaterial;
+            txt.material = null; // UI/Default renders in both eyes
             txt.font = uiFont;
             txt.fontSize = fontSize;
             txt.alignment = anchor;
@@ -1713,7 +1715,7 @@ namespace UR3eVR
             rt.sizeDelta = new Vector2(0f, 60f);
 
             Text txt = txtObj.AddComponent<Text>();
-            txt.material = stereoUIMaterial;
+            txt.material = null;
             txt.font = uiFont;
             txt.fontSize = fontSize;
             txt.alignment = TextAnchor.MiddleLeft;

@@ -134,6 +134,7 @@ namespace UR3eVR
                 backgroundImage.type = Image.Type.Sliced;
                 backgroundImage.pixelsPerUnitMultiplier = 2f;
                 backgroundImage.material = visionWindowMaterial;
+                if (visionWindowMaterial != null) visionWindowMaterial.enableInstancing = true;
                 backgroundImage.color = new Color(0.06f, 0.08f, 0.14f, 0.96f); // Deep Obsidian Glass
             }
             else
@@ -161,7 +162,7 @@ namespace UR3eVR
             titleText = titleObj.GetComponent<Text>();
             titleText.material = null; // Standard CanvasRenderer renders to BOTH EYES
             titleText.font = font;
-            titleText.fontSize = 17;
+            titleText.fontSize = 18;
             titleText.fontStyle = FontStyle.Bold;
             titleText.alignment = TextAnchor.MiddleLeft;
             titleText.color = Color.white;
@@ -197,8 +198,8 @@ namespace UR3eVR
             telemetryText = bodyObj.GetComponent<Text>();
             telemetryText.material = null;
             telemetryText.font = font;
-            telemetryText.fontSize = 13;
-            telemetryText.lineSpacing = 1.15f;
+            telemetryText.fontSize = 14;
+            telemetryText.lineSpacing = 1.2f;
             telemetryText.alignment = TextAnchor.UpperLeft;
             telemetryText.color = new Color(0.9f, 0.95f, 1.0f, 0.95f);
 
@@ -218,6 +219,7 @@ namespace UR3eVR
                 grabImg.sprite = roundedRectSprite;
                 grabImg.type = Image.Type.Sliced;
                 grabImg.material = visionElementMaterial;
+                if (visionElementMaterial != null) visionElementMaterial.enableInstancing = true;
                 grabImg.color = new Color(0.25f, 0.32f, 0.44f, 0.92f);
             }
             else

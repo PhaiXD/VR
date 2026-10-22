@@ -227,6 +227,7 @@ namespace UR3eVR
                 bgImg.type = Image.Type.Sliced;
                 bgImg.pixelsPerUnitMultiplier = 2f;
                 bgImg.material = visionWindowMaterial;
+                if (visionWindowMaterial != null) visionWindowMaterial.enableInstancing = true;
                 bgImg.color = new Color(0.06f, 0.08f, 0.14f, 0.96f); // Deep Obsidian Glass (Darker, non-glare)
             }
             else
@@ -285,7 +286,7 @@ namespace UR3eVR
             subtitleText = subObj.GetComponent<TextMeshProUGUI>();
             if (visionFont != null) subtitleText.font = visionFont;
             subtitleText.fontSize = 11;
-            subtitleText.color = new Color(0.6f, 0.75f, 0.9f, 0.85f);
+            subtitleText.color = new Color(0.7f, 0.82f, 0.95f, 0.90f);
             subtitleText.text = "Detecting video devices...";
 
             // 2.3 Action Buttons on Header (Clean, Non-Overlapping Hitboxes)
@@ -413,6 +414,7 @@ namespace UR3eVR
                 img.sprite = roundedRectSprite;
                 img.type = Image.Type.Sliced;
                 img.material = visionElementMaterial;
+                if (visionElementMaterial != null) visionElementMaterial.enableInstancing = true;
                 img.color = normalColor;
             }
             else
@@ -471,6 +473,7 @@ namespace UR3eVR
                 img.sprite = roundedRectSprite;
                 img.type = Image.Type.Sliced;
                 img.material = visionElementMaterial;
+                if (visionElementMaterial != null) visionElementMaterial.enableInstancing = true;
                 img.color = new Color(0.45f, 0.14f, 0.18f, 0.95f);
             }
             else

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -358,7 +358,7 @@ namespace UR3eVR
 
             Plane plane = new Plane(normal, c[0]);
             if (!plane.Raycast(ray, out float enter)) return false;
-            if (enter <= 0.05f) return false;
+            if (enter <= 0.01f) return false;
 
             Vector3 p = ray.GetPoint(enter);
             Vector3 v = p - c[0];
