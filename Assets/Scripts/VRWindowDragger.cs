@@ -129,8 +129,8 @@ namespace UR3eVR
 
             bool stillHolding = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, OVRInput.Controller.LTouch)
                              || OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, OVRInput.Controller.LTouch)
-                             || OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.LTouch) > 0.25f
-                             || Input.GetMouseButton(0);
+                             || OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.LTouch) > 0.25f;
+            try { stillHolding |= Input.GetMouseButton(0); } catch { }
 
             if (!stillHolding)
             {

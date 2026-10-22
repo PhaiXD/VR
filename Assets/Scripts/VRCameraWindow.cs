@@ -201,15 +201,29 @@ namespace UR3eVR
             CreateHeaderButton(header.transform, "CloseBtn", "\u2715", new Vector2(0.86f, 0.18f), new Vector2(0.97f, 0.82f),
                 new Color(0.40f, 0.15f, 0.18f, 0.95f), () => SetWindowOpen(false));
 
-            // 3. Center Screen: Video Feed (RawImage)
+            // 3. Center Screen: Video Container with RectMask2D (No Skew or Overflow)
+            GameObject videoContainer = new GameObject("VideoContainer");
+            videoContainer.transform.SetParent(canvasObj.transform, false);
+            RectTransform contRT = videoContainer.AddComponent<RectTransform>();
+            contRT.anchorMin = new Vector2(0.04f, 0.13f);
+            contRT.anchorMax = new Vector2(0.96f, 0.83f);
+            contRT.offsetMin = Vector2.zero;
+            contRT.offsetMax = Vector2.zero;
+            contRT.pivot = new Vector2(0.5f, 0.5f);
+
+            Image contBg = videoContainer.AddComponent<Image>();
+            contBg.color = new Color(0.02f, 0.03f, 0.05f, 0.95f);
+            videoContainer.AddComponent<RectMask2D>();
+
+            // Video Feed (RawImage) perfectly contained
             GameObject videoObj = new GameObject("VideoDisplay");
-            videoObj.transform.SetParent(canvasObj.transform, false);
+            videoObj.transform.SetParent(videoContainer.transform, false);
             RectTransform vidRT = videoObj.AddComponent<RectTransform>();
-            vidRT.anchorMin = new Vector2(0.04f, 0.14f);
-            vidRT.anchorMax = new Vector2(0.96f, 0.83f);
+            vidRT.anchorMin = Vector2.zero;
+            vidRT.anchorMax = Vector2.one;
+            vidRT.offsetMin = Vector2.zero;
+            vidRT.offsetMax = Vector2.zero;
             vidRT.pivot = new Vector2(0.5f, 0.5f);
-            vidRT.anchoredPosition = Vector2.zero;
-            vidRT.sizeDelta = Vector2.zero;
 
             videoRawImage = videoObj.AddComponent<RawImage>();
             videoRawImage.color = Color.white;

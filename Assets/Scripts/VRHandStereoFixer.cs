@@ -32,6 +32,18 @@ namespace UR3eVR
             ApplyStereoFix();
             FixStereoWorldCanvasesAndText();
             EnsureGripPoseAndLaserPointer();
+
+            // Maintain left hand mesh visibility based on controller connection
+            bool isLeftCtrlActive = (OVRInput.GetConnectedControllers() & OVRInput.Controller.LTouch) != 0;
+            var leftHandObj = GameObject.Find("[BuildingBlock] Hand Tracking left");
+            if (leftHandObj != null)
+            {
+                var smr = leftHandObj.GetComponent<SkinnedMeshRenderer>();
+                if (smr != null && smr.enabled == isLeftCtrlActive)
+                {
+                    smr.enabled = !isLeftCtrlActive;
+                }
+            }
         }
 
         private void Update()
@@ -41,6 +53,18 @@ namespace UR3eVR
             ApplyStereoFix();
             FixStereoWorldCanvasesAndText();
             EnsureGripPoseAndLaserPointer();
+
+            // Maintain left hand mesh visibility based on controller connection
+            bool isLeftCtrlActive = (OVRInput.GetConnectedControllers() & OVRInput.Controller.LTouch) != 0;
+            var leftHandObj = GameObject.Find("[BuildingBlock] Hand Tracking left");
+            if (leftHandObj != null)
+            {
+                var smr = leftHandObj.GetComponent<SkinnedMeshRenderer>();
+                if (smr != null && smr.enabled == isLeftCtrlActive)
+                {
+                    smr.enabled = !isLeftCtrlActive;
+                }
+            }
         }
 
         private void LateUpdate()
@@ -48,6 +72,18 @@ namespace UR3eVR
             ApplyStereoFix();
             FixStereoWorldCanvasesAndText();
             EnsureGripPoseAndLaserPointer();
+
+            // Maintain left hand mesh visibility based on controller connection
+            bool isLeftCtrlActive = (OVRInput.GetConnectedControllers() & OVRInput.Controller.LTouch) != 0;
+            var leftHandObj = GameObject.Find("[BuildingBlock] Hand Tracking left");
+            if (leftHandObj != null)
+            {
+                var smr = leftHandObj.GetComponent<SkinnedMeshRenderer>();
+                if (smr != null && smr.enabled == isLeftCtrlActive)
+                {
+                    smr.enabled = !isLeftCtrlActive;
+                }
+            }
         }
 
         private void EnableControllerDrivenHandPoses()
@@ -136,40 +172,44 @@ namespace UR3eVR
             {
                 if (omr == null) continue;
 
-                // 1. Prevent OVRMeshRenderer from hiding the hand when confidence fluctuates or controller is held
+                var skel = omr.GetComponent<OVRSkeleton>();
+                bool isRight = omr.gameObject.name.ToLower().Contains("right") ||
+                    (skel != null && (skel.GetSkeletonType() == OVRSkeleton.SkeletonType.XRHandRight || skel.GetSkeletonType() == OVRSkeleton.SkeletonType.HandRight));
+
+                // If LEFT hand and controller is connected: Hide left hand mesh so only the controller model shows cleanly!
+                if (!isRight)
+                {
+                    bool isLeftCtrl = (OVRInput.GetConnectedControllers() & OVRInput.Controller.LTouch) != 0;
+                    var smr = omr.GetComponent<SkinnedMeshRenderer>();
+                    if (smr != null)
+                    {
+                        smr.enabled = !isLeftCtrl;
+                    }
+                    continue; // Do NOT force confidence behavior on left hand!
+                }
+
+                // RIGHT HAND ONLY (robot teleoperation bare hand):
                 try
                 {
                     var confField = typeof(OVRMeshRenderer).GetField("_confidenceBehavior", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    if (confField != null)
-                    {
-                        confField.SetValue(omr, OVRMeshRenderer.ConfidenceBehavior.None);
-                    }
+                    if (confField != null) confField.SetValue(omr, OVRMeshRenderer.ConfidenceBehavior.None);
                 }
                 catch { }
 
-                // 2. Prevent swapping to uninstanced system gesture material
                 try
                 {
                     var gestField = typeof(OVRMeshRenderer).GetField("_systemGestureBehavior", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    if (gestField != null)
-                    {
-                        gestField.SetValue(omr, OVRMeshRenderer.SystemGestureBehavior.None);
-                    }
+                    if (gestField != null) gestField.SetValue(omr, OVRMeshRenderer.SystemGestureBehavior.None);
                 }
                 catch { }
 
-                // 3. Set original material reference to instanced URP material
                 try
                 {
                     var origMatField = typeof(OVRMeshRenderer).GetField("_originalMaterial", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    if (origMatField != null && urpHandMaterial != null)
-                    {
-                        origMatField.SetValue(omr, urpHandMaterial);
-                    }
+                    if (origMatField != null && urpHandMaterial != null) origMatField.SetValue(omr, urpHandMaterial);
                 }
                 catch { }
 
-                // 4. Force bind mesh and skeleton once both are ready
                 var ovrMesh = omr.GetComponent<OVRMesh>();
                 var ovrSkeleton = omr.GetComponent<OVRSkeleton>();
                 if (!omr.IsInitialized && ovrMesh != null && ovrMesh.IsInitialized && ovrSkeleton != null && ovrSkeleton.IsInitialized)
@@ -313,45 +353,39 @@ namespace UR3eVR
 
         public void EnsureGripPoseAndLaserPointer()
         {
-            // Ensure VRControllerGripPoseHandler on both hands
+            // Ensure VRControllerGripPoseHandler ONLY on LEFT hand (Right hand is bare hand for robot control)
             var hands = FindObjectsByType<OVRHand>(FindObjectsSortMode.None);
             foreach (var h in hands)
             {
                 if (h == null) continue;
+                var skel = h.GetComponent<OVRSkeleton>();
+                bool isRight = (h.GetHand() == OVRPlugin.Hand.HandRight)
+                    || (skel != null && (skel.GetSkeletonType() == OVRSkeleton.SkeletonType.XRHandRight || skel.GetSkeletonType() == OVRSkeleton.SkeletonType.HandRight))
+                    || h.gameObject.name.ToLower().Contains("right");
+                if (isRight)
+                {
+                    var existingGrip = h.GetComponent<VRControllerGripPoseHandler>();
+                    if (existingGrip != null) Destroy(existingGrip);
+                    continue;
+                }
+
                 if (h.GetComponent<VRControllerGripPoseHandler>() == null)
                 {
                     var grip = h.gameObject.AddComponent<VRControllerGripPoseHandler>();
                     grip.ovrHand = h;
                     grip.ovrSkeleton = h.GetComponent<OVRSkeleton>();
+                    grip.controller = OVRInput.Controller.LTouch;
+                    grip.isRightHand = false;
                 }
             }
 
-            // CRITICAL: Ensure VRRemoteLaserPointer is on LEFT CONTROLLER ANCHOR
-            var lca = GameObject.Find("LeftControllerAnchor");
+            // Ensure VRRemoteLaserPointer exists and operates smoothly
             var laser = VRRemoteLaserPointer.Instance ?? FindAnyObjectByType<VRRemoteLaserPointer>();
-
             if (laser == null)
             {
                 GameObject laserObj = new GameObject("VR_Remote_LaserPointer");
-                if (lca != null) laserObj.transform.SetParent(lca.transform, false);
                 laser = laserObj.AddComponent<VRRemoteLaserPointer>();
                 laser.controller = OVRInput.Controller.LTouch;
-                laser.leftControllerAnchor = lca != null ? lca.transform : null;
-            }
-            else
-            {
-                // Ensure properly parented to LeftControllerAnchor
-                if (lca != null && laser.transform.parent != lca.transform)
-                {
-                    laser.transform.SetParent(lca.transform, false);
-                    laser.transform.localPosition = Vector3.zero;
-                    laser.transform.localRotation = Quaternion.identity;
-                }
-                laser.controller = OVRInput.Controller.LTouch;
-                if (laser.leftControllerAnchor == null && lca != null)
-                {
-                    laser.leftControllerAnchor = lca.transform;
-                }
             }
         }
     }

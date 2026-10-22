@@ -202,7 +202,7 @@ namespace UR3eVR
 
             // Keyboard Fallback
             CheckKeyboardFallback();
-            if (Input.GetKey(KeyCode.H) || Input.GetKey(KeyCode.L))
+            bool kHL = false; try { kHL = Input.GetKey(KeyCode.H) || Input.GetKey(KeyCode.L); } catch {} if (kHL)
             {
                 pinchingNow = true;
             }
@@ -359,11 +359,11 @@ namespace UR3eVR
 
         private void CheckKeyboardFallback()
         {
-            if (Input.GetKeyDown(KeyCode.H))
+            bool kH = false; try { kH = Input.GetKeyDown(KeyCode.H); } catch {} if (kH)
             {
                 TriggerHomeAndRecenter();
             }
-            if (Input.GetKeyDown(KeyCode.L) || Input.GetKeyDown(KeyCode.G))
+            bool kLG = false; try { kLG = Input.GetKeyDown(KeyCode.L) || Input.GetKeyDown(KeyCode.G); } catch {} if (kLG)
             {
                 ToggleGripperLock();
             }

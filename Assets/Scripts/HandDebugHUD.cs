@@ -29,6 +29,7 @@ namespace UR3eVR
 
         // UI GameObjects
         private GameObject hudCanvasObj;
+        private bool hasPositionedDefault = false;
         private Canvas hudCanvas;
         private Text titleText;
         private Text telemetryText;
@@ -151,22 +152,57 @@ namespace UR3eVR
             telemetryText.alignment = TextAnchor.UpperLeft;
             telemetryText.color = Color.white;
 
-            // Help Footer
-            GameObject helpObj = new GameObject("HelpFooter");
-            helpObj.transform.SetParent(bgObj.transform, false);
-            RectTransform helpRT = helpObj.AddComponent<RectTransform>();
-            helpRT.anchorMin = new Vector2(0.04f, 0.02f);
-            helpRT.anchorMax = new Vector2(0.96f, 0.14f);
-            helpRT.offsetMin = Vector2.zero;
-            helpRT.offsetMax = Vector2.zero;
+            // Bottom Grab Handle Bar with VRWindowDragger (Draggable via Left Remote Laser)
+            GameObject grabBarObj = new GameObject("GrabHandleBar");
+            grabBarObj.transform.SetParent(bgObj.transform, false);
+            RectTransform grabRT = grabBarObj.AddComponent<RectTransform>();
+            grabRT.anchorMin = new Vector2(0.20f, 0.02f);
+            grabRT.anchorMax = new Vector2(0.80f, 0.12f);
+            grabRT.offsetMin = Vector2.zero;
+            grabRT.offsetMax = Vector2.zero;
 
-            helpText = helpObj.AddComponent<Text>();
-            helpText.material = stereoUIMat;
-            helpText.font = font;
-            helpText.fontSize = 12;
-            helpText.alignment = TextAnchor.MiddleLeft;
-            helpText.color = new Color(0.6f, 0.85f, 1.0f, 0.85f);
-            helpText.text = "Left Remote: [X] Set Origin/Home | [Y] Pause/Resume | [L-Stick] Auto-Shake";
+            Image grabImg = grabBarObj.AddComponent<Image>();
+            grabImg.material = stereoUIMat;
+            grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
+
+            var dragger = grabBarObj.AddComponent<VRWindowDragger>();
+            dragger.windowTransform = hudCanvasObj.transform;
+
+            GameObject grabLabel = new GameObject("Label");
+            grabLabel.transform.SetParent(grabBarObj.transform, false);
+            RectTransform glRT = grabLabel.AddComponent<RectTransform>();
+            glRT.anchorMin = Vector2.zero;
+            glRT.anchorMax = Vector2.one;
+            glRT.offsetMin = Vector2.zero;
+            glRT.offsetMax = Vector2.zero;
+            Text glText = grabLabel.AddComponent<Text>();
+            glText.font = font;
+            glText.fontSize = 11;
+            glText.fontStyle = FontStyle.Bold;
+            glText.alignment = TextAnchor.MiddleCenter;
+            glText.color = new Color(0.0f, 0.85f, 1.0f, 0.95f);
+            glText.text = "--- GRAB TO MOVE ---";
+        }
+
+        public void RepositionDefault()
+        {
+            if (centerEyeAnchor == null) FindReferences();
+            if (centerEyeAnchor == null || hudCanvasObj == null) return;
+
+            Vector3 headForward = centerEyeAnchor.forward;
+            headForward.y = 0f;
+            if (headForward.sqrMagnitude > 0.001f) headForward.Normalize();
+            else headForward = Vector3.forward;
+
+            Vector3 headRight = Vector3.Cross(Vector3.up, headForward).normalized;
+
+            Vector3 targetPos = centerEyeAnchor.position
+                              + headForward * hudDistance
+                              + headRight * hudSideOffset
+                              + Vector3.up * hudHeightOffset;
+
+            hudCanvasObj.transform.position = targetPos;
+            hudCanvasObj.transform.rotation = Quaternion.LookRotation(hudCanvasObj.transform.position - centerEyeAnchor.position, Vector3.up);
         }
 
         private void LateUpdate()
@@ -183,23 +219,11 @@ namespace UR3eVR
                 }
             }
 
-            // Smooth Peripheral Billboard Placement
-            if (centerEyeAnchor != null && hudCanvasObj != null)
+            // Position once on startup, then stay completely still in World Space (Draggable via Left Laser)
+            if (!hasPositionedDefault && centerEyeAnchor != null && hudCanvasObj != null)
             {
-                Vector3 headForward = centerEyeAnchor.forward;
-                headForward.y = 0f;
-                if (headForward.sqrMagnitude > 0.001f) headForward.Normalize();
-                else headForward = Vector3.forward;
-
-                Vector3 headRight = Vector3.Cross(Vector3.up, headForward).normalized;
-
-                Vector3 targetPos = centerEyeAnchor.position
-                                  + headForward * hudDistance
-                                  + headRight * hudSideOffset
-                                  + Vector3.up * hudHeightOffset;
-
-                hudCanvasObj.transform.position = Vector3.Lerp(hudCanvasObj.transform.position, targetPos, Time.deltaTime * followSpeed);
-                hudCanvasObj.transform.rotation = Quaternion.LookRotation(hudCanvasObj.transform.position - centerEyeAnchor.position);
+                RepositionDefault();
+                hasPositionedDefault = true;
             }
 
             // Update Telemetry Display

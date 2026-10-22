@@ -6,11 +6,14 @@ namespace UR3eVR
     /// <summary>
     /// VRControllerGripPoseHandler: Ensures Meta Quest Natural Controller-Driven Hand Poses
     /// are active for the left remote hand, and prevents interference with bare-hand robot teleoperation.
-    /// - Right hand is strictly bare-hand tracking for UR3e robot teleoperation (no remote posing).
+    /// - Right hand is strictly bare-hand tracking for UR3e robot teleoperation.
     /// - Left hand utilizes Meta Quest native Natural Controller-driven hand poses when holding controller.
     /// </summary>
     public class VRControllerGripPoseHandler : MonoBehaviour
     {
+        public OVRHand ovrHand;
+        public OVRSkeleton ovrSkeleton;
+        public OVRInput.Controller controller = OVRInput.Controller.LTouch;
         public bool isRightHand = false;
 
         private void Awake()
@@ -23,7 +26,6 @@ namespace UR3eVR
                 return;
             }
 
-            // Ensure Meta Quest native natural controller-driven hand poses are enabled
             EnableNativeControllerHandPoses();
         }
 
@@ -41,7 +43,22 @@ namespace UR3eVR
 
         private void DetectHandSide()
         {
-            var skel = GetComponent<OVRSkeleton>();
+            if (ovrHand != null)
+            {
+                var ht = ovrHand.GetHand();
+                if (ht == OVRPlugin.Hand.HandRight)
+                {
+                    isRightHand = true;
+                    return;
+                }
+                else if (ht == OVRPlugin.Hand.HandLeft)
+                {
+                    isRightHand = false;
+                    return;
+                }
+            }
+
+            var skel = ovrSkeleton != null ? ovrSkeleton : GetComponent<OVRSkeleton>();
             if (skel != null)
             {
                 var st = skel.GetSkeletonType();

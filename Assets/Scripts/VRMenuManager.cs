@@ -237,10 +237,14 @@ namespace UR3eVR
             }
             catch { }
 
-            if (!menuPressed && Input.GetKeyDown(keyboardMenuKey))
+            try
             {
-                menuPressed = true;
+                if (!menuPressed && Input.GetKeyDown(keyboardMenuKey))
+                {
+                    menuPressed = true;
+                }
             }
+            catch { }
 
             if (menuPressed)
             {
@@ -842,10 +846,14 @@ namespace UR3eVR
             }
             catch { }
 
-            if (!triggerClicked && Input.GetMouseButtonDown(0))
+            try
             {
-                triggerClicked = true;
+                if (!triggerClicked && Input.GetMouseButtonDown(0))
+                {
+                    triggerClicked = true;
+                }
             }
+            catch { }
 
             if (triggerClicked && hoveredButton != null)
             {
