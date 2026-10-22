@@ -17,6 +17,7 @@ namespace UR3eVR
 
         private Camera centerEyeCamera;
         private Material stereoTextMaterial;
+        private Material stereoUIMaterial;
 
         private void Awake()
         {

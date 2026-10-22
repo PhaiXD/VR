@@ -43,6 +43,7 @@ namespace UR3eVR
 
         // Dedicated private material instance to prevent texture pollution
         private Material privateVideoMaterial;
+        private Material stereoUIMaterial;
 
         // Webcam runtime
         private WebCamTexture webcamTexture;
@@ -152,7 +153,7 @@ namespace UR3eVR
             hRT.offsetMax = Vector2.zero;
 
             Image hImg = header.AddComponent<Image>();
-            hImg.material = null;
+            hImg.material = stereoUIMaterial;
             hImg.color = new Color(0.04f, 0.05f, 0.08f, 0.98f);
 
             // 2.1 Live Indicator Dot
@@ -163,7 +164,7 @@ namespace UR3eVR
             dotRT.anchorMax = new Vector2(0.03f, 0.35f);
             dotRT.sizeDelta = new Vector2(12f, 12f);
             liveDotImage = liveDot.AddComponent<Image>();
-            liveDotImage.material = null;
+            liveDotImage.material = stereoUIMaterial;
             liveDotImage.color = new Color(0.1f, 1.0f, 0.4f, 1.0f);
 
             // 2.2 Title & Subtitle Texts
@@ -179,6 +180,7 @@ namespace UR3eVR
             titleText.fontSize = 17;
             titleText.fontStyle = FontStyle.Bold;
             titleText.color = Color.white;
+            titleText.material = stereoUIMaterial;
             titleText.text = "Camera Feed [Live]";
 
             GameObject subObj = new GameObject("SubtitleText");
@@ -192,6 +194,7 @@ namespace UR3eVR
             subtitleText.font = uiFont;
             subtitleText.fontSize = 12;
             subtitleText.color = new Color(0.0f, 0.85f, 1.0f, 0.85f);
+            subtitleText.material = stereoUIMaterial;
             subtitleText.text = "Detecting devices...";
 
             // 2.3 Action Buttons on Header (Switch Camera, Close)
@@ -263,7 +266,7 @@ namespace UR3eVR
             grabRT.offsetMax = Vector2.zero;
 
             Image grabImg = grabBarObj.AddComponent<Image>();
-            grabImg.material = null;
+            grabImg.material = stereoUIMaterial;
             grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
 
             Outline grabOutline = grabBarObj.AddComponent<Outline>();
@@ -283,6 +286,7 @@ namespace UR3eVR
             grabLabel.fontSize = 13;
             grabLabel.alignment = TextAnchor.MiddleCenter;
             grabLabel.color = new Color(0.8f, 0.9f, 1.0f, 0.85f);
+            grabLabel.material = stereoUIMaterial;
             grabLabel.text = "\u2550\u2550\u2550  GRAB TO MOVE  \u2550\u2550\u2550";
 
             // Attach VRWindowDragger
@@ -306,7 +310,8 @@ namespace UR3eVR
             rt.offsetMax = Vector2.zero;
 
             Image img = btnObj.AddComponent<Image>();
-            img.material = null; // Clean default
+            img.material = stereoUIMaterial;
+            img.raycastTarget = true;
             img.color = bgCol;
 
             Button btn = btnObj.AddComponent<Button>();
@@ -333,6 +338,8 @@ namespace UR3eVR
             txt.fontStyle = FontStyle.Bold;
             txt.alignment = TextAnchor.MiddleCenter;
             txt.color = Color.white;
+            txt.material = stereoUIMaterial;
+            txt.raycastTarget = false;
             txt.text = label;
 
             interactiveButtons.Add(btn);

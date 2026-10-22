@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -16,19 +16,19 @@ namespace UR3eVR
     }
 
     /// <summary>
-    /// VRMenuManager: ระบบ Quick Menu ลอยในพื้นที่ 3D สำหรับ Meta Quest Touch Remote
-    /// - ปุ่ม Menu รีโมทมือซ้าย (3 ขีด / Hamburger): OVRInput.Button.Start / KeyCode.M
-    /// - สี่เมนูหลัก: Set Origin, Open New Cam, Open Log (Auto-popup เมื่อมีเตือนเหลือง/แดง), Background
-    /// - ปุ่มปิด [X] อยู่มุมขวาบนของทุกหน้าต่าง
-    /// - แก้ไขปัญหา Single Pass Instanced: กำหนด worldCamera และ Material Instancing ให้มองเห็นครบทั้ง 2 ตา
-    /// - ลำแสงเลเซอร์ (Laser Beam) ยิงพุ่งออกจากปลายรีโมทคอนโทรลเลอร์ขวาอย่างแม่นยำ พร้อมจุด Reticle
+    /// VRMenuManager: à¸£à¸°à¸šà¸š Quick Menu à¸¥à¸­à¸¢à¹ƒà¸™à¸žà¸·à¹‰à¸™à¸—à¸µà¹ˆ 3D à¸ªà¸³à¸«à¸£à¸±à¸š Meta Quest Touch Remote
+    /// - à¸›à¸¸à¹ˆà¸¡ Menu à¸£à¸µà¹‚à¸¡à¸—à¸¡à¸·à¸­à¸‹à¹‰à¸²à¸¢ (3 à¸‚à¸µà¸” / Hamburger): OVRInput.Button.Start / KeyCode.M
+    /// - à¸ªà¸µà¹ˆà¹€à¸¡à¸™à¸¹à¸«à¸¥à¸±à¸: Set Origin, Open New Cam, Open Log (Auto-popup à¹€à¸¡à¸·à¹ˆà¸­à¸¡à¸µà¹€à¸•à¸·à¸­à¸™à¹€à¸«à¸¥à¸·à¸­à¸‡/à¹à¸”à¸‡), Background
+    /// - à¸›à¸¸à¹ˆà¸¡à¸›à¸´à¸” [X] à¸­à¸¢à¸¹à¹ˆà¸¡à¸¸à¸¡à¸‚à¸§à¸²à¸šà¸™à¸‚à¸­à¸‡à¸—à¸¸à¸à¸«à¸™à¹‰à¸²à¸•à¹ˆà¸²à¸‡
+    /// - à¹à¸à¹‰à¹„à¸‚à¸›à¸±à¸à¸«à¸² Single Pass Instanced: à¸à¸³à¸«à¸™à¸” worldCamera à¹à¸¥à¸° Material Instancing à¹ƒà¸«à¹‰à¸¡à¸­à¸‡à¹€à¸«à¹‡à¸™à¸„à¸£à¸šà¸—à¸±à¹‰à¸‡ 2 à¸•à¸²
+    /// - à¸¥à¸³à¹à¸ªà¸‡à¹€à¸¥à¹€à¸‹à¸­à¸£à¹Œ (Laser Beam) à¸¢à¸´à¸‡à¸žà¸¸à¹ˆà¸‡à¸­à¸­à¸à¸ˆà¸²à¸à¸›à¸¥à¸²à¸¢à¸£à¸µà¹‚à¸¡à¸—à¸„à¸­à¸™à¹‚à¸—à¸£à¸¥à¹€à¸¥à¸­à¸£à¹Œà¸‚à¸§à¸²à¸­à¸¢à¹ˆà¸²à¸‡à¹à¸¡à¹ˆà¸™à¸¢à¸³ à¸žà¸£à¹‰à¸­à¸¡à¸ˆà¸¸à¸” Reticle
     /// </summary>
     public class VRMenuManager : MonoBehaviour
     {
         public static VRMenuManager Instance { get; private set; }
 
         [Header("Menu Key & Controller Bindings")]
-        [Tooltip("ปุ่ม Menu รีโมทซ้าย (ขีด 3 ขีดบน LTouch)")]
+        [Tooltip("à¸›à¸¸à¹ˆà¸¡ Menu à¸£à¸µà¹‚à¸¡à¸—à¸‹à¹‰à¸²à¸¢ (à¸‚à¸µà¸” 3 à¸‚à¸µà¸”à¸šà¸™ LTouch)")]
         public OVRInput.Button menuButton = OVRInput.Button.Start;
         public OVRInput.RawButton rawMenuButton = OVRInput.RawButton.Start;
         public KeyCode keyboardMenuKey = KeyCode.M;
@@ -304,7 +304,7 @@ namespace UR3eVR
             // Update Laser Pointer interaction
             UpdateLaserPointer();
 
-            // Direct Hand Poke interaction (ใช้นิ้วจิ้มปุ่มโดยตรง)
+            // Direct Hand Poke interaction (à¹ƒà¸Šà¹‰à¸™à¸´à¹‰à¸§à¸ˆà¸´à¹‰à¸¡à¸›à¸¸à¹ˆà¸¡à¹‚à¸”à¸¢à¸•à¸£à¸‡)
             CheckDirectHandPoke();
         }
 
@@ -398,13 +398,13 @@ namespace UR3eVR
             if (vrHandMover != null)
             {
                 vrHandMover.RecenterAnchor();
-                ShowToast("🎯 Origin Recentered to Current Pose!");
+                ShowToast("ðŸŽ¯ Origin Recentered to Current Pose!");
                 HapticPulse(0.7f, 0.2f);
                 AddLog("ACTION", "Origin Recentered to current hand/controller pose.");
             }
             else
             {
-                ShowToast("⚠️ VRHandMover not found!");
+                ShowToast("âš ï¸ VRHandMover not found!");
             }
         }
 
@@ -505,7 +505,7 @@ namespace UR3eVR
 
                 bool isActive = (i == activeIndex);
 
-                string label = isActive ? $"★ [ACTIVE] {deviceIdx}: {devName}" : $"📹 {deviceIdx}: {devName}";
+                string label = isActive ? $"â˜… [ACTIVE] {deviceIdx}: {devName}" : $"ðŸ“¹ {deviceIdx}: {devName}";
                 Color bgCol = isActive ? new Color(0.0f, 0.45f, 0.40f, 0.95f) : new Color(0.12f, 0.16f, 0.24f, 0.95f);
                 Color textCol = isActive ? new Color(0.2f, 1.0f, 0.8f, 1.0f) : Color.white;
 
@@ -566,7 +566,7 @@ namespace UR3eVR
                 alertBannerObj.SetActive(true);
                 bool isError = (level == "ERROR");
                 alertBannerImage.color = isError ? new Color(0.9f, 0.15f, 0.15f, 0.95f) : new Color(0.95f, 0.70f, 0.05f, 0.95f);
-                string icon = isError ? "🛑 ERROR:" : "⚠️ WARNING:";
+                string icon = isError ? "ðŸ›‘ ERROR:" : "âš ï¸ WARNING:";
                 alertBannerText.text = $"{icon} {message}";
                 bannerDismissTimer = 8.0f;
             }
@@ -706,7 +706,7 @@ namespace UR3eVR
                 Vector3 localPos = rt.InverseTransformPoint(fingerPos);
                 Rect r = rt.rect;
 
-                // ตรวจสอบว่าปลายนิ้วอยู่ในกรอบปุ่ม และแตะที่ระนาบปุ่ม (< 2.5 ซม.)
+                // à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸šà¸§à¹ˆà¸²à¸›à¸¥à¸²à¸¢à¸™à¸´à¹‰à¸§à¸­à¸¢à¸¹à¹ˆà¹ƒà¸™à¸à¸£à¸­à¸šà¸›à¸¸à¹ˆà¸¡ à¹à¸¥à¸°à¹à¸•à¸°à¸—à¸µà¹ˆà¸£à¸°à¸™à¸²à¸šà¸›à¸¸à¹ˆà¸¡ (< 2.5 à¸‹à¸¡.)
                 if (r.Contains(new Vector2(localPos.x, localPos.y)) && Mathf.Abs(localPos.z) <= 0.025f)
                 {
                     btn.onClick.Invoke();
@@ -983,19 +983,19 @@ namespace UR3eVR
             vlg.childForceExpandHeight = true;
 
             // 1. Set Origin
-            CreateSimpleButton(btnGrid.transform, "🎯  Set Origin (Calibrate to Hand Pose)", 52,
+            CreateSimpleButton(btnGrid.transform, "ðŸŽ¯  Set Origin (Calibrate to Hand Pose)", 52,
                 new Color(0.0f, 0.38f, 0.55f, 0.95f), Color.white, ActionSetOrigin);
 
             // 2. Open New Cam
-            CreateSimpleButton(btnGrid.transform, "📹  Open New Cam (Webcam Selector)", 52,
+            CreateSimpleButton(btnGrid.transform, "ðŸ“¹  Open New Cam (Webcam Selector)", 52,
                 new Color(0.12f, 0.22f, 0.40f, 0.95f), Color.white, ActionOpenNewCam);
 
             // 3. Open Log
-            CreateSimpleButton(btnGrid.transform, "📋  Open Log (UR3e & Python Monitor)", 52,
+            CreateSimpleButton(btnGrid.transform, "ðŸ“‹  Open Log (UR3e & Python Monitor)", 52,
                 new Color(0.24f, 0.18f, 0.38f, 0.95f), Color.white, ActionOpenLog);
 
             // 4. Background
-            CreateSimpleButton(btnGrid.transform, "🌌  Background (Scene & Skybox)", 52,
+            CreateSimpleButton(btnGrid.transform, "ðŸŒŒ  Background (Scene & Skybox)", 52,
                 new Color(0.14f, 0.24f, 0.26f, 0.95f), Color.white, ActionBackground);
 
             // Status Bar at Bottom
@@ -1078,10 +1078,10 @@ namespace UR3eVR
             hlg.childForceExpandWidth = true;
             hlg.childForceExpandHeight = true;
 
-            CreateSimpleButton(bottomBar.transform, "🔄 Refresh Cameras", 38,
+            CreateSimpleButton(bottomBar.transform, "ðŸ”„ Refresh Cameras", 38,
                 new Color(0.18f, 0.22f, 0.32f, 0.95f), Color.white, PopulateCameraList);
 
-            CreateSimpleButton(bottomBar.transform, "◀ Back to Menu", 38,
+            CreateSimpleButton(bottomBar.transform, "â—€ Back to Menu", 38,
                 new Color(0.24f, 0.14f, 0.18f, 0.95f), Color.white, ActionBackToMain);
         }
 
@@ -1100,7 +1100,7 @@ namespace UR3eVR
             alertBannerImage = alertBannerObj.AddComponent<Image>();
             alertBannerImage.material = stereoUIMaterial;
             alertBannerImage.color = new Color(0.95f, 0.70f, 0.05f, 0.95f);
-            alertBannerText = CreateText(alertBannerObj.transform, "⚠️ ALERT", 16, Color.black, TextAnchor.MiddleCenter);
+            alertBannerText = CreateText(alertBannerObj.transform, "âš ï¸ ALERT", 16, Color.black, TextAnchor.MiddleCenter);
             alertBannerText.fontStyle = FontStyle.Bold;
             alertBannerObj.SetActive(false);
 
@@ -1155,10 +1155,10 @@ namespace UR3eVR
             hlg.childForceExpandWidth = true;
             hlg.childForceExpandHeight = true;
 
-            CreateSimpleButton(bottomBar.transform, "🗑 Clear Logs", 38,
+            CreateSimpleButton(bottomBar.transform, "ðŸ—‘ Clear Logs", 38,
                 new Color(0.24f, 0.18f, 0.22f, 0.95f), Color.white, ActionClearLogs);
 
-            CreateSimpleButton(bottomBar.transform, "◀ Back to Menu", 38,
+            CreateSimpleButton(bottomBar.transform, "â—€ Back to Menu", 38,
                 new Color(0.18f, 0.22f, 0.32f, 0.95f), Color.white, ActionBackToMain);
         }
 
@@ -1170,34 +1170,34 @@ namespace UR3eVR
 
                 // Option 0: Solid Black Lab Mode
                 skyboxOptions.Add(new SkyboxOption { 
-                    displayName = "⬛ Solid Black", 
+                    displayName = "â¬› Solid Black", 
                     category = "Minimalist Void", 
                     skyboxMaterial = null 
                 });
 
 #if UNITY_EDITOR
                 // Day & Atmosphere
-                AddSkyboxOption("☀️ Casual Day", "Clear Daylight", "Assets/SkySeries Freebie/CasualDay.mat");
-                AddSkyboxOption("🌅 Cloudy Morning", "Sunrise Pastels", "Assets/SkySeries Freebie/Cloudymorning.mat");
-                AddSkyboxOption("🌤️ Clouded Sun Glow", "Golden Hour", "Assets/SkySeries Freebie/CloudedSunGlow.mat");
-                AddSkyboxOption("☁️ Day In The Clouds", "Cloudtop Horizon", "Assets/SkySeries Freebie/DayInTheClouds.mat");
-                AddSkyboxOption("☁️ Fluffball Day", "Sunny Clouds", "Assets/SkySeries Freebie/FluffballDay.mat");
+                AddSkyboxOption("â˜€ï¸ Casual Day", "Clear Daylight", "Assets/SkySeries Freebie/CasualDay.mat");
+                AddSkyboxOption("ðŸŒ… Cloudy Morning", "Sunrise Pastels", "Assets/SkySeries Freebie/Cloudymorning.mat");
+                AddSkyboxOption("ðŸŒ¤ï¸ Clouded Sun Glow", "Golden Hour", "Assets/SkySeries Freebie/CloudedSunGlow.mat");
+                AddSkyboxOption("â˜ï¸ Day In The Clouds", "Cloudtop Horizon", "Assets/SkySeries Freebie/DayInTheClouds.mat");
+                AddSkyboxOption("â˜ï¸ Fluffball Day", "Sunny Clouds", "Assets/SkySeries Freebie/FluffballDay.mat");
 
                 // Weather & High Skies
-                AddSkyboxOption("⛅ Skyhigh Fluffy Cloud", "High Altitude", "Assets/SkySeries Freebie/SkyhighFluffycloudField.mat");
-                AddSkyboxOption("🌫️ Sunless Cirrus", "Soft Overcast", "Assets/SkySeries Freebie/SunlessCirruscover.mat");
-                AddSkyboxOption("⚡ Dark Storm", "Thunderstorm", "Assets/SkySeries Freebie/DarkStorm.mat");
-                AddSkyboxOption("☀️ Mega Sun", "Dramatic Sun", "Assets/SkySeries Freebie/MegaSun.mat");
-                AddSkyboxOption("💡 Ambience Exposure", "Studio HDRI", "Assets/SkySeries Freebie/AmbienceExposure.mat");
-                AddSkyboxOption("🔮 High Fantasy", "Dreamscape", "Assets/SkySeries Freebie/HighFantasy.mat");
+                AddSkyboxOption("â›… Skyhigh Fluffy Cloud", "High Altitude", "Assets/SkySeries Freebie/SkyhighFluffycloudField.mat");
+                AddSkyboxOption("ðŸŒ«ï¸ Sunless Cirrus", "Soft Overcast", "Assets/SkySeries Freebie/SunlessCirruscover.mat");
+                AddSkyboxOption("âš¡ Dark Storm", "Thunderstorm", "Assets/SkySeries Freebie/DarkStorm.mat");
+                AddSkyboxOption("â˜€ï¸ Mega Sun", "Dramatic Sun", "Assets/SkySeries Freebie/MegaSun.mat");
+                AddSkyboxOption("ðŸ’¡ Ambience Exposure", "Studio HDRI", "Assets/SkySeries Freebie/AmbienceExposure.mat");
+                AddSkyboxOption("ðŸ”® High Fantasy", "Dreamscape", "Assets/SkySeries Freebie/HighFantasy.mat");
 
                 // Space, Night & Aquatic
-                AddSkyboxOption("✨ Coriolis Night 4K", "Midnight Stars", "Assets/SkySeries Freebie/CoriolisNight4k.mat");
-                AddSkyboxOption("🌌 Cosmic Cool Cloud", "Deep Nebula", "Assets/SkySeries Freebie/CosmicCoolCloud_Eq.mat");
-                AddSkyboxOption("🌍 Planetary Earth", "Orbital Space", "Assets/SkySeries Freebie/PlanetaryEarth.mat");
-                AddSkyboxOption("🪐 Unearthly Red", "Alien World", "Assets/SkySeries Freebie/UnearthlyRed.mat");
-                AddSkyboxOption("🌊 Under The Sea 4K", "Aquatic Abyss", "Assets/SkySeries Freebie/UnderTheSea4k.mat");
-                AddSkyboxOption("🌌 6-Sided Cosmic Cloud", "Cosmic 360", "Assets/SkySeries Freebie/6sidedCosmicCoolCloud.mat");
+                AddSkyboxOption("âœ¨ Coriolis Night 4K", "Midnight Stars", "Assets/SkySeries Freebie/CoriolisNight4k.mat");
+                AddSkyboxOption("ðŸŒŒ Cosmic Cool Cloud", "Deep Nebula", "Assets/SkySeries Freebie/CosmicCoolCloud_Eq.mat");
+                AddSkyboxOption("ðŸŒ Planetary Earth", "Orbital Space", "Assets/SkySeries Freebie/PlanetaryEarth.mat");
+                AddSkyboxOption("ðŸª Unearthly Red", "Alien World", "Assets/SkySeries Freebie/UnearthlyRed.mat");
+                AddSkyboxOption("ðŸŒŠ Under The Sea 4K", "Aquatic Abyss", "Assets/SkySeries Freebie/UnderTheSea4k.mat");
+                AddSkyboxOption("ðŸŒŒ 6-Sided Cosmic Cloud", "Cosmic 360", "Assets/SkySeries Freebie/6sidedCosmicCoolCloud.mat");
 #endif
             }
         }
@@ -1261,7 +1261,7 @@ namespace UR3eVR
             aOl.effectDistance = new Vector2(1.5f, -1.5f);
 
             activeBgStatusText = CreateText(activeCard.transform, 
-                $"Active Skybox: <b><color=#00E5FF>{currentActiveSkyboxName}</color></b>   <size=13><color=#00FF88>[🟢 Applied to all VR Eyes]</color></size>",
+                $"Active Skybox: <b><color=#00E5FF>{currentActiveSkyboxName}</color></b>   <size=13><color=#00FF88>[ðŸŸ¢ Applied to all VR Eyes]</color></size>",
                 16, Color.white, TextAnchor.MiddleCenter);
 
             // 2. 2-Column Buttons Grid Container
@@ -1289,7 +1289,7 @@ namespace UR3eVR
             pbRT.offsetMin = Vector2.zero;
             pbRT.offsetMax = Vector2.zero;
 
-            CreatePaginationButton(pageBar.transform, "◀ Prev Page", new Vector2(0f, 0f), new Vector2(0.26f, 1f), () => ChangeBgPage(-1));
+            CreatePaginationButton(pageBar.transform, "â—€ Prev Page", new Vector2(0f, 0f), new Vector2(0.26f, 1f), () => ChangeBgPage(-1));
 
             GameObject piObj = new GameObject("PageIndicator");
             piObj.transform.SetParent(pageBar.transform, false);
@@ -1307,7 +1307,7 @@ namespace UR3eVR
             bgPageIndicatorText.alignment = TextAnchor.MiddleCenter;
             bgPageIndicatorText.color = new Color(0.85f, 0.95f, 1.0f, 0.95f);
 
-            CreatePaginationButton(pageBar.transform, "Next Page ▶", new Vector2(0.74f, 0f), new Vector2(1.0f, 1f), () => ChangeBgPage(1));
+            CreatePaginationButton(pageBar.transform, "Next Page â–¶", new Vector2(0.74f, 0f), new Vector2(1.0f, 1f), () => ChangeBgPage(1));
 
             // 4. Bottom Bar (Back to Main Menu)
             GameObject bottomBar = new GameObject("BottomBar");
@@ -1318,7 +1318,7 @@ namespace UR3eVR
             bbRT.offsetMin = Vector2.zero;
             bbRT.offsetMax = Vector2.zero;
 
-            CreateSimpleButton(bottomBar.transform, "◀ Back to Main Menu", 36,
+            CreateSimpleButton(bottomBar.transform, "â—€ Back to Main Menu", 36,
                 new Color(0.18f, 0.22f, 0.32f, 0.95f), Color.white, ActionBackToMain);
 
             RefreshBgPageButtons();
@@ -1440,7 +1440,7 @@ namespace UR3eVR
 
             if (bgPageIndicatorText != null)
             {
-                bgPageIndicatorText.text = $"Page {currentBgPage + 1} of {totalPages}   •   {categoryHeader}";
+                bgPageIndicatorText.text = $"Page {currentBgPage + 1} of {totalPages}   â€¢   {categoryHeader}";
             }
 
             UpdateActiveBgCard();
@@ -1450,7 +1450,7 @@ namespace UR3eVR
         {
             if (activeBgStatusText != null)
             {
-                activeBgStatusText.text = $"Active Skybox: <b><color=#00E5FF>{currentActiveSkyboxName}</color></b>   <size=13><color=#00FF88>[🟢 Applied to all VR Eyes]</color></size>";
+                activeBgStatusText.text = $"Active Skybox: <b><color=#00E5FF>{currentActiveSkyboxName}</color></b>   <size=13><color=#00FF88>[ðŸŸ¢ Applied to all VR Eyes]</color></size>";
             }
         }
 
@@ -1544,7 +1544,7 @@ namespace UR3eVR
                 Button bBtn = backObj.AddComponent<Button>();
                 bBtn.onClick.AddListener(() => onBack());
 
-                CreateText(backObj.transform, "◀ Back", 14, Color.white, TextAnchor.MiddleCenter);
+                CreateText(backObj.transform, "â—€ Back", 14, Color.white, TextAnchor.MiddleCenter);
             }
 
             GameObject titleObj = new GameObject("TitleText");
@@ -1580,7 +1580,7 @@ namespace UR3eVR
             Button cBtn = closeObj.AddComponent<Button>();
             cBtn.onClick.AddListener(() => onClose());
 
-            Text xText = CreateText(closeObj.transform, "✕", 20, Color.white, TextAnchor.MiddleCenter);
+            Text xText = CreateText(closeObj.transform, "âœ•", 20, Color.white, TextAnchor.MiddleCenter);
             xText.fontStyle = FontStyle.Bold;
         }
 
@@ -1636,6 +1636,7 @@ namespace UR3eVR
             txt.alignment = anchor;
             txt.color = col;
             txt.text = content;
+            txt.raycastTarget = false;
             return txt;
         }
 
@@ -1654,6 +1655,7 @@ namespace UR3eVR
             txt.alignment = TextAnchor.MiddleLeft;
             txt.color = col;
             txt.text = content;
+            txt.raycastTarget = false;
             return txt;
         }
     }

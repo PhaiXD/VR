@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -11,6 +11,7 @@ namespace UR3eVR
     /// VRRemoteLaserPointer: Clean, straight, non-magnetic laser pointer for Meta Quest Touch Controller.
     /// Provides 100% reliable UI raycasting, hover highlights via EventSystem, and click/drag execution.
     /// Follows Meta Quest OS style interaction (as seen in standard VR interfaces).
+    /// Supports distance grabbing of UI windows via laser trigger or grip, with single-dragger locking.
     /// </summary>
     public class VRRemoteLaserPointer : MonoBehaviour
     {
@@ -205,9 +206,11 @@ namespace UR3eVR
                 return;
             }
 
-            // Safe Trigger Input check (No legacy Input exceptions)
+            // Safe Trigger Input check (Both Index Trigger and Grip button on Left Remote)
             bool isTriggerDown = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, controller)
-                              || OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, controller) > 0.45f;
+                              || OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, controller) > 0.45f
+                              || OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, controller)
+                              || OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, controller) > 0.45f;
 
             try
             {
@@ -218,17 +221,42 @@ namespace UR3eVR
             bool isTriggerJustPressed = isTriggerDown && !wasTriggerDown;
             bool isTriggerJustReleased = !isTriggerDown && wasTriggerDown;
 
-            // Handle active window dragging
+            // Handle active window dragging in 3D space via Laser Pointer
             if (activeDraggingWindow != null)
             {
-                if (isTriggerDown)
+                bool isStillHeld = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, controller)
+                                || OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, controller) > 0.35f
+                                || OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, controller)
+                                || OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, controller) > 0.35f;
+                try { isStillHeld |= Input.GetMouseButton(0); } catch { }
+
+                if (isStillHeld && activeDraggingWindow.windowTransform != null)
                 {
                     Vector3 targetWindowPos = rayOrigin + rayDir * activeDragDistance - activeDragLocalOffset;
-                    activeDraggingWindow.transform.position = Vector3.Lerp(activeDraggingWindow.transform.position, targetWindowPos, Time.deltaTime * 25f);
+                    activeDraggingWindow.windowTransform.position = Vector3.Lerp(activeDraggingWindow.windowTransform.position, targetWindowPos, Time.deltaTime * 25f);
+
+                    if (headTransform != null)
+                    {
+                        Vector3 toHead = headTransform.position - activeDraggingWindow.windowTransform.position;
+                        toHead.y = 0;
+                        if (toHead.sqrMagnitude > 0.01f)
+                        {
+                            Quaternion targetRot = Quaternion.LookRotation(-toHead.normalized, Vector3.up);
+                            activeDraggingWindow.windowTransform.rotation = Quaternion.Slerp(activeDraggingWindow.windowTransform.rotation, targetRot, Time.deltaTime * 20f);
+                        }
+                    }
                 }
                 else
                 {
-                    activeDraggingWindow = null;
+                    if (VRWindowDragger.ActiveDragger == activeDraggingWindow)
+                    {
+                        VRWindowDragger.ActiveDragger = null;
+                    }
+                    if (activeDraggingWindow != null)
+                    {
+                        activeDraggingWindow.EndGrab();
+                        activeDraggingWindow = null;
+                    }
                 }
             }
 
@@ -255,10 +283,23 @@ namespace UR3eVR
                 }
                 else if (hitDragger != null)
                 {
-                    activeDraggingWindow = hitDragger;
-                    activeDragDistance = Vector3.Distance(rayOrigin, hitDragger.transform.position);
-                    activeDragLocalOffset = endPoint - hitDragger.transform.position;
-                    HapticPulse(0.5f, 0.08f);
+                    // Only one UI window can be grabbed at any time
+                    if (VRWindowDragger.ActiveDragger == null || VRWindowDragger.ActiveDragger == hitDragger)
+                    {
+                        activeDraggingWindow = hitDragger;
+                        hitDragger.StartGrab(leftControllerAnchor ?? transform, true);
+                        if (hitDragger.windowTransform != null)
+                        {
+                            activeDragDistance = Vector3.Distance(rayOrigin, hitDragger.windowTransform.position);
+                            activeDragLocalOffset = (rayOrigin + rayDir * activeDragDistance) - hitDragger.windowTransform.position;
+                        }
+                        else
+                        {
+                            activeDragDistance = Vector3.Distance(rayOrigin, hitDragger.transform.position);
+                            activeDragLocalOffset = (rayOrigin + rayDir * activeDragDistance) - hitDragger.transform.position;
+                        }
+                        HapticPulse(0.5f, 0.08f);
+                    }
                 }
             }
 
@@ -302,7 +343,14 @@ namespace UR3eVR
                 RectTransform crt = c.GetComponent<RectTransform>();
                 if (crt == null) continue;
 
-                Plane plane = new Plane(-c.transform.forward, c.transform.position);
+                // Two-sided plane intersection so rotation angle never breaks hit detection
+                Vector3 planeNormal = -c.transform.forward;
+                if (Vector3.Dot(planeNormal, ray.direction) > 0f)
+                {
+                    planeNormal = c.transform.forward;
+                }
+
+                Plane plane = new Plane(planeNormal, c.transform.position);
                 float enter;
                 if (plane.Raycast(ray, out enter) && enter > 0.05f && enter < closestDist)
                 {
@@ -312,11 +360,6 @@ namespace UR3eVR
 
                     if (r.Contains(new Vector2(localHit.x, localHit.y)))
                     {
-                        closestDist = enter;
-                        endPoint = worldHit;
-                        hitNormal = -c.transform.forward;
-                        hitAnything = true;
-
                         // Check Buttons/Selectables within this canvas
                         var selectables = c.GetComponentsInChildren<Selectable>(false);
                         Selectable bestSel = null;
@@ -329,9 +372,14 @@ namespace UR3eVR
                             if (srt == null) continue;
 
                             Vector3 selLocal = srt.InverseTransformPoint(worldHit);
-                            if (srt.rect.Contains(new Vector2(selLocal.x, selLocal.y)))
+                            Rect sRect = srt.rect;
+                            // Generous VR comfort margin (20px) so small buttons (Close [X], Back [<-]) are very easy to hit!
+                            sRect.xMin -= 20f; sRect.xMax += 20f;
+                            sRect.yMin -= 20f; sRect.yMax += 20f;
+
+                            if (sRect.Contains(new Vector2(selLocal.x, selLocal.y)))
                             {
-                                float d = Vector3.Distance(worldHit, srt.position);
+                                float d = (new Vector2(selLocal.x, selLocal.y) - srt.rect.center).sqrMagnitude;
                                 if (d < bestSelDist)
                                 {
                                     bestSelDist = d;
@@ -339,9 +387,9 @@ namespace UR3eVR
                                 }
                             }
                         }
-                        hitSelectable = bestSel;
 
                         // Check Window Draggers in canvas
+                        VRWindowDragger thisDragger = null;
                         var draggers = c.GetComponentsInChildren<VRWindowDragger>(false);
                         foreach (var d in draggers)
                         {
@@ -350,13 +398,23 @@ namespace UR3eVR
                             if (drt != null)
                             {
                                 Vector3 dLocal = drt.InverseTransformPoint(worldHit);
-                                if (drt.rect.Contains(new Vector2(dLocal.x, dLocal.y)))
+                                Rect dRect = drt.rect;
+                                dRect.xMin -= 20f; dRect.xMax += 20f;
+                                dRect.yMin -= 20f; dRect.yMax += 20f;
+                                if (dRect.Contains(new Vector2(dLocal.x, dLocal.y)))
                                 {
-                                    hitDragger = d;
+                                    thisDragger = d;
                                     break;
                                 }
                             }
                         }
+
+                        closestDist = enter;
+                        endPoint = worldHit;
+                        hitNormal = planeNormal;
+                        hitSelectable = bestSel;
+                        hitDragger = thisDragger;
+                        hitAnything = true;
                     }
                 }
             }
@@ -449,25 +507,21 @@ namespace UR3eVR
             if (t != null) t.localScale = orig;
         }
 
-        private void SetVisualColors(Color col)
+        private void SetVisualColors(Color c)
         {
-            lineRenderer.startColor = col;
-            lineRenderer.endColor = new Color(col.r, col.g, col.b, 0.25f);
-
             if (lineMaterial != null)
             {
-                lineMaterial.color = col;
-                if (lineMaterial.HasProperty("_BaseColor")) lineMaterial.SetColor("_BaseColor", col);
+                lineMaterial.color = c;
+                if (lineMaterial.HasProperty("_BaseColor")) lineMaterial.SetColor("_BaseColor", c);
             }
-
             if (reticleMaterial != null)
             {
-                reticleMaterial.color = col;
-                if (reticleMaterial.HasProperty("_BaseColor")) reticleMaterial.SetColor("_BaseColor", col);
+                reticleMaterial.color = c;
+                if (reticleMaterial.HasProperty("_BaseColor")) reticleMaterial.SetColor("_BaseColor", c);
             }
         }
 
-        public void HapticPulse(float amplitude, float duration)
+        private void HapticPulse(float amplitude, float duration)
         {
             try
             {
@@ -482,7 +536,7 @@ namespace UR3eVR
             yield return new WaitForSeconds(delay);
             try
             {
-                OVRInput.SetControllerVibration(0f, 0f, controller);
+                OVRInput.SetControllerVibration(0, 0, controller);
             }
             catch { }
         }
