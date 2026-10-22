@@ -388,30 +388,8 @@ namespace UR3eVR
             Vector3 bestInteractableHit = Vector3.zero;
             Vector3 bestInteractableNormal = -ray.direction;
 
-            // 1. Raycast all active VRWindowDraggers directly against their world quad
-            var draggers = FindObjectsByType<VRWindowDragger>(FindObjectsSortMode.None);
-            foreach (var d in draggers)
-            {
-                if (d == null || !d.gameObject.activeInHierarchy) continue;
-                RectTransform drt = d.GetComponent<RectTransform>();
-                if (drt != null)
-                {
-                    // 20% margin for comfortable VR grabbing
-                    if (RaycastRectTransformQuad(ray, drt, 0.20f, out float dist, out Vector3 pt, out Vector3 norm))
-                    {
-                        if (dist < closestInteractableDist)
-                        {
-                            closestInteractableDist = dist;
-                            bestDragger = d;
-                            bestSel = null;
-                            bestInteractableHit = pt;
-                            bestInteractableNormal = norm;
-                        }
-                    }
-                }
-            }
-
-            // 2. Raycast all active Selectables (Buttons, Toggles, etc.) directly against their world quads
+            // 1. Raycast all active Selectables (Buttons, Toggles, etc.) FIRST with priority and 0.0 margin
+            // Buttons ALWAYS take precedence over window dragging!
             var selectables = FindObjectsByType<Selectable>(FindObjectsSortMode.None);
             foreach (var sel in selectables)
             {
@@ -419,8 +397,8 @@ namespace UR3eVR
                 RectTransform srt = sel.GetComponent<RectTransform>();
                 if (srt == null) continue;
 
-                // 15% margin for comfortable VR clicking
-                if (RaycastRectTransformQuad(ray, srt, 0.15f, out float dist, out Vector3 pt, out Vector3 norm))
+                // Pixel-perfect quad hit testing matching exact visual button geometry
+                if (RaycastRectTransformQuad(ray, srt, 0.0f, out float dist, out Vector3 pt, out Vector3 norm))
                 {
                     if (dist < closestInteractableDist)
                     {
@@ -433,6 +411,32 @@ namespace UR3eVR
                 }
             }
 
+            // 2. Raycast VRWindowDraggers ONLY if no button was hit
+            if (bestSel == null)
+            {
+                var draggers = FindObjectsByType<VRWindowDragger>(FindObjectsSortMode.None);
+                foreach (var d in draggers)
+                {
+                    if (d == null || !d.gameObject.activeInHierarchy) continue;
+                    RectTransform drt = d.GetComponent<RectTransform>();
+                    if (drt != null)
+                    {
+                        // Exact quad bounds so dragger never overlaps adjacent buttons
+                        if (RaycastRectTransformQuad(ray, drt, 0.0f, out float dist, out Vector3 pt, out Vector3 norm))
+                        {
+                            if (dist < closestInteractableDist)
+                            {
+                                closestInteractableDist = dist;
+                                bestDragger = d;
+                                bestSel = null;
+                                bestInteractableHit = pt;
+                                bestInteractableNormal = norm;
+                            }
+                        }
+                    }
+                }
+            }
+
             // If we hit an interactable (button or dragger), prioritize it!
             if (bestSel != null || bestDragger != null)
             {
@@ -440,6 +444,12 @@ namespace UR3eVR
                 hitNormal = bestInteractableNormal;
                 hitSelectable = bestSel;
                 hitDragger = bestDragger;
+
+                Camera eventCam = headTransform != null ? headTransform.GetComponent<Camera>() : Camera.main;
+                if (eventCam != null && pointerEventData != null)
+                {
+                    pointerEventData.position = eventCam.WorldToScreenPoint(bestInteractableHit);
+                }
                 return true;
             }
 
