@@ -299,11 +299,29 @@ namespace UR3eVR
                 var cec = GameObject.Find("CenterEyeAnchor");
                 if (cec != null) centerEyeCamera = cec.GetComponent<Camera>();
                 if (centerEyeCamera == null && Camera.main != null) centerEyeCamera = Camera.main;
+                if (centerEyeCamera == null)
+                {
+                    var allCams = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+                    foreach (var cam in allCams)
+                    {
+                        if (cam.gameObject.name.Contains("CenterEye") || cam.stereoEnabled || cam.targetDisplay == 0)
+                        {
+                            centerEyeCamera = cam;
+                            break;
+                        }
+                    }
+                }
             }
 
             if (centerEyeCamera != null)
             {
-                // Include inactive canvases (such as VRMenuManager when closed)
+                if (centerEyeCamera.tag != "MainCamera")
+                {
+                    try { centerEyeCamera.tag = "MainCamera"; } catch { }
+                }
+
+                // Continuously guarantee worldCamera on ALL WorldSpace Canvases in the scene
+                // In XR Single Pass Instanced, null worldCamera causes single-eye (left only) rendering!
                 var canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None);
                 foreach (var c in canvases)
                 {
