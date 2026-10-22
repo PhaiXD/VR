@@ -359,6 +359,26 @@ namespace UR3eVR
             }
         }
 
+        /// <summary>
+        /// Sends PAUSE command to Python UR3e bridge to freeze/resume robot teleoperation
+        /// </summary>
+        public void SendPause(bool isPaused)
+        {
+            try
+            {
+                string cmd = isPaused ? "PAUSE 1\n" : "PAUSE 0\n";
+                if (client != null && client.Connected && stream != null)
+                {
+                    byte[] bytes = System.Text.Encoding.ASCII.GetBytes(cmd);
+                    stream.Write(bytes, 0, bytes.Length);
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning("[GripperBridge] SendPause error: " + ex.Message);
+            }
+        }
+
         private void StartNetworkThread()
         {
             if (networkThread != null && networkThread.IsAlive) return;

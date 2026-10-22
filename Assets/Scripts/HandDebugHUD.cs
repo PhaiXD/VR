@@ -221,12 +221,12 @@ namespace UR3eVR
             string bridgeStatus = (gripperBridge != null && gripperBridge.isConnected) ? "<color=#00FF88>CONNECTED</color>" : "<color=#FF4444>OFFLINE</color>";
             string modeStatus = "CLOSED-LOOP 6-DOF POSE";
 
-            Vector3 tgtMm = (vrHandMover != null) ? vrHandMover.targetRobotPos * 1000f : Vector3.zero;
+            Vector3 tgtMm = (vrHandMover != null) ? vrHandMover.currentTargetPos * 1000f : Vector3.zero;
             Vector3 actMm = (gripperBridge != null) ? gripperBridge.actualRobotPos * 1000f : Vector3.zero;
             float posErrMm = Vector3.Distance(tgtMm, actMm);
 
             string homeStatus = (starterPoint != null && starterPoint.isAtHome) ? "<color=#00FF88>READY AT HOME</color>" : "<color=#00D4FF>OFF-HOME</color>";
-            string pinchDesc = (pinchDetector != null) ? $"Pinch: {pinchDetector.normalizedPinch * 100f:F0}% ({pinchDetector.gripPositionMm:F1} mm)" : "Pinch: N/A";
+            string pinchDesc = (pinchDetector != null) ? $"Pinch: {pinchDetector.normalizedPinch * 100f:F0}% (POS: {pinchDetector.gripperPos})" : "Pinch: N/A";
             string barrierDesc = (safetyVisualizer != null) ? $"Dist to Base: {safetyVisualizer.distToBase * 100f:F1} cm | Limit: {safetyVisualizer.outerRadius * 100f:F0} cm" : "";
 
             telemetryText.text = 
