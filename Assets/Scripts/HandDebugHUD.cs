@@ -134,7 +134,7 @@ namespace UR3eVR
                 backgroundImage.type = Image.Type.Sliced;
                 backgroundImage.pixelsPerUnitMultiplier = 2f;
                 backgroundImage.material = visionWindowMaterial;
-                backgroundImage.color = new Color(1f, 1f, 1f, 0.92f);
+                backgroundImage.color = new Color(0.06f, 0.08f, 0.14f, 0.96f); // Deep Obsidian Glass
             }
             else
             {
@@ -143,7 +143,7 @@ namespace UR3eVR
             }
 
             var ol = bgObj.AddComponent<Outline>();
-            ol.effectColor = new Color(1.0f, 1.0f, 1.0f, 0.25f);
+            ol.effectColor = new Color(0.20f, 0.65f, 1.0f, 0.35f);
             ol.effectDistance = new Vector2(1.5f, -1.5f);
 
             Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -227,7 +227,7 @@ namespace UR3eVR
             }
 
             Outline grabOutline = grabBarObj.AddComponent<Outline>();
-            grabOutline.effectColor = new Color(1.0f, 1.0f, 1.0f, 0.25f);
+            grabOutline.effectColor = new Color(0.30f, 0.70f, 1.0f, 0.35f);
             grabOutline.effectDistance = new Vector2(1f, -1f);
 
             var dragger = grabBarObj.GetComponent<VRWindowDragger>();
@@ -248,7 +248,7 @@ namespace UR3eVR
             glText.fontStyle = FontStyle.Bold;
             glText.alignment = TextAnchor.MiddleCenter;
             glText.color = new Color(0.9f, 0.95f, 1.0f, 0.90f);
-            glText.text = "═══  GRAB TO MOVE  ═══";
+            glText.text = "---  GRAB TO MOVE  ---";
         }
 
         public void RepositionDefault()
@@ -301,11 +301,32 @@ namespace UR3eVR
         {
             if (telemetryText == null) return;
 
+            bool isConnected = gripperBridge != null && gripperBridge.isConnected;
             bool isPaused = vrHandMover != null && vrHandMover.isTeleoperationPaused;
+            bool isEngaged = vrHandMover != null && vrHandMover.isTrackingEngaged;
+
             if (pauseBannerText != null)
             {
-                pauseBannerText.text = isPaused ? "[PAUSED - FROZEN]" : "[TRACKING ACTIVE]";
-                pauseBannerText.color = isPaused ? new Color(1f, 0.25f, 0.25f, 1f) : new Color(0.2f, 1f, 0.4f, 1f);
+                if (!isConnected)
+                {
+                    pauseBannerText.text = "[BRIDGE OFFLINE]";
+                    pauseBannerText.color = new Color(1f, 0.3f, 0.3f, 1f);
+                }
+                else if (isPaused)
+                {
+                    pauseBannerText.text = "[PAUSED - PRESS Y / P]";
+                    pauseBannerText.color = new Color(1f, 0.8f, 0.1f, 1f);
+                }
+                else if (!isEngaged)
+                {
+                    pauseBannerText.text = "[LOCKED - DOCK HOME / PRESS X]";
+                    pauseBannerText.color = new Color(0.2f, 0.85f, 1f, 1f);
+                }
+                else
+                {
+                    pauseBannerText.text = "[TRACKING ACTIVE]";
+                    pauseBannerText.color = new Color(0.2f, 1f, 0.4f, 1f);
+                }
             }
 
             string bridgeStatus = (gripperBridge != null && gripperBridge.isConnected) ? "<color=#00FF88>CONNECTED</color>" : "<color=#FF4444>OFFLINE</color>";

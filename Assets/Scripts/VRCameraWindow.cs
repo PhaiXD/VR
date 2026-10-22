@@ -11,14 +11,16 @@ namespace UR3eVR
 {
     /// <summary>
     /// VRCameraWindow: Apple Vision Pro OS Style Floating Webcam Monitor for Meta Quest VR
-    /// - Styled using JetXR UI Kit For Vision Pro OS (frosted glass, pill buttons, rounded glass window)
-    /// - Perfectly centered 16:9 RawImage viewport (eliminates "จอกล้องเบี้ยว" skew / overflow)
-    /// - Dual-eye stereo rendering in XR Single Pass Instanced (eliminates single-left-eye UI bug)
-    /// - Accurate 3D Quad raycast hitboxes for Switch Cam, Close Button, and Pill Grab Bar
+    /// - Deep obsidian dark-mode frosted glass with high contrast and zero eye fatigue
+    /// - Multi-camera support: Click "+ Add Cam" to spawn multiple simultaneous live camera windows in VR
+    /// - Dual-eye stereo rendering in XR Single Pass Instanced
+    /// - Pixel-perfect raycast hitboxes for Switch Cam, Add Cam, Close, and Pill Grab Bar
+    /// - Centered 16:9 RawImage viewport
     /// </summary>
     public class VRCameraWindow : MonoBehaviour
     {
         public static VRCameraWindow Instance { get; private set; }
+        public static List<VRCameraWindow> ActiveWindows = new List<VRCameraWindow>();
 
         [Header("Window Configuration")]
         [Tooltip("Width of window in meters in VR")]
@@ -33,9 +35,10 @@ namespace UR3eVR
         [Header("State")]
         public bool isOpen = true;
         public int currentCameraIndex = 0;
+        public bool isSecondaryWindow = false;
 
         // UI References
-        private GameObject canvasObj;
+        public GameObject canvasObj;
         private Canvas canvas;
         private RawImage videoRawImage;
         private TextMeshProUGUI titleText;
@@ -63,19 +66,34 @@ namespace UR3eVR
         private Transform leftControllerAnchor;
         private Transform rightControllerAnchor;
 
-        private bool hasPositionedDefault = false;
+        public bool hasPositionedDefault = false;
         private List<Button> interactiveButtons = new List<Button>();
 
         private void Awake()
         {
-            if (Instance != null && Instance != this)
+            if (Instance == null)
             {
-                Destroy(gameObject);
-                return;
+                Instance = this;
             }
-            Instance = this;
+            if (!ActiveWindows.Contains(this))
+            {
+                ActiveWindows.Add(this);
+            }
 
             LoadVisionProAssets();
+        }
+
+        private void OnDestroy()
+        {
+            if (ActiveWindows.Contains(this))
+            {
+                ActiveWindows.Remove(this);
+            }
+            if (Instance == this)
+            {
+                Instance = ActiveWindows.Count > 0 ? ActiveWindows[0] : null;
+            }
+            StopCurrentStream();
         }
 
         private void Start()
@@ -88,7 +106,6 @@ namespace UR3eVR
 
         private void LoadVisionProAssets()
         {
-            // 1. Vision Window Frosted Glass Material
             if (visionWindowMaterial == null)
             {
 #if UNITY_EDITOR
@@ -102,21 +119,19 @@ namespace UR3eVR
                 }
             }
 
-            // 2. Vision Element Platter Material
             if (visionElementMaterial == null)
             {
 #if UNITY_EDITOR
-                visionElementMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/LightElementBackground.mat")
-                                     ?? AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/DarkElementBackground.mat");
+                visionElementMaterial = AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/DarkElementBackground.mat")
+                                     ?? AssetDatabase.LoadAssetAtPath<Material>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Materials/LightElementBackground.mat");
 #endif
                 if (visionElementMaterial == null)
                 {
-                    visionElementMaterial = Resources.Load<Material>("VisionUI/LightElementBackground")
-                                         ?? Resources.Load<Material>("VisionUI/DarkElementBackground");
+                    visionElementMaterial = Resources.Load<Material>("VisionUI/DarkElementBackground")
+                                         ?? Resources.Load<Material>("VisionUI/LightElementBackground");
                 }
             }
 
-            // 3. Vision Sprites
             if (windowGlassSprite == null)
             {
 #if UNITY_EDITOR
@@ -154,12 +169,11 @@ namespace UR3eVR
                     crossIconSprite = Resources.Load<Sprite>("VisionUI/Cross Icon");
             }
 
-            // 4. Vision Font
             if (visionFont == null)
             {
 #if UNITY_EDITOR
-                visionFont = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/JetXR/UI Kit For Vision Pro OS/Fonts/Resources/Inter-SemiBold SDF.asset")
-                          ?? AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/JetXR/UI Kit For Vision Pro OS/Fonts/Resources/Inter-Bold SDF.asset");
+                visionFont = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Fonts/Inter-SemiBold SDF.asset")
+                          ?? AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/JetXR/UI Kit For Vision Pro OS/Runtime/Fonts/Inter-Bold SDF.asset");
 #endif
                 if (visionFont == null)
                     visionFont = Resources.Load<TMP_FontAsset>("Inter-SemiBold SDF") ?? Resources.Load<TMP_FontAsset>("Inter-Bold SDF");
@@ -205,7 +219,7 @@ namespace UR3eVR
             canvasRT.sizeDelta = new Vector2(680f, 440f);
             canvasRT.localScale = Vector3.one * (windowWidthMeters / 680f);
 
-            // 1. Vision Pro OS Frosted Glass Window Frame
+            // 1. Deep Obsidian Dark-Mode Frosted Glass Window Frame (Dark, Sleek, High-Contrast)
             Image bgImg = canvasObj.AddComponent<Image>();
             if (windowGlassSprite != null)
             {
@@ -213,16 +227,16 @@ namespace UR3eVR
                 bgImg.type = Image.Type.Sliced;
                 bgImg.pixelsPerUnitMultiplier = 2f;
                 bgImg.material = visionWindowMaterial;
-                bgImg.color = new Color(1f, 1f, 1f, 0.92f);
+                bgImg.color = new Color(0.06f, 0.08f, 0.14f, 0.96f); // Deep Obsidian Glass (Darker, non-glare)
             }
             else
             {
                 bgImg.material = null;
-                bgImg.color = new Color(0.08f, 0.10f, 0.16f, 0.94f);
+                bgImg.color = new Color(0.06f, 0.08f, 0.12f, 0.96f);
             }
 
             Outline bgOutline = canvasObj.AddComponent<Outline>();
-            bgOutline.effectColor = new Color(1.0f, 1.0f, 1.0f, 0.22f);
+            bgOutline.effectColor = new Color(0.20f, 0.65f, 1.0f, 0.35f); // Subtle Neon Cyan Rim
             bgOutline.effectDistance = new Vector2(1.5f, -1.5f);
 
             // 2. Vision Pro OS Navigation Bar (Header)
@@ -243,20 +257,20 @@ namespace UR3eVR
             dotRT.pivot = new Vector2(0.5f, 0.5f);
             dotRT.sizeDelta = new Vector2(10f, 10f);
             liveDotImage = liveDot.GetComponent<Image>();
-            liveDotImage.material = null; // Standard UI renderer for both eyes
+            liveDotImage.material = null;
             liveDotImage.color = new Color(0.19f, 0.82f, 0.35f, 1.0f);
 
             // 2.2 Title & Subtitle Texts (TMP with Vision font)
             GameObject titleObj = new GameObject("TitleText", typeof(RectTransform), typeof(TextMeshProUGUI));
             titleObj.transform.SetParent(header.transform, false);
             RectTransform titleRT = titleObj.GetComponent<RectTransform>();
-            titleRT.anchorMin = new Vector2(0.06f, 0.45f);
-            titleRT.anchorMax = new Vector2(0.55f, 0.92f);
+            titleRT.anchorMin = new Vector2(0.06f, 0.48f);
+            titleRT.anchorMax = new Vector2(0.40f, 0.92f);
             titleRT.offsetMin = Vector2.zero;
             titleRT.offsetMax = Vector2.zero;
             titleText = titleObj.GetComponent<TextMeshProUGUI>();
             if (visionFont != null) titleText.font = visionFont;
-            titleText.fontSize = 17;
+            titleText.fontSize = 16;
             titleText.fontStyle = FontStyles.Bold;
             titleText.color = Color.white;
             titleText.text = "Camera Feed [Live]";
@@ -265,23 +279,29 @@ namespace UR3eVR
             subObj.transform.SetParent(header.transform, false);
             RectTransform subRT = subObj.GetComponent<RectTransform>();
             subRT.anchorMin = new Vector2(0.06f, 0.08f);
-            subRT.anchorMax = new Vector2(0.55f, 0.46f);
+            subRT.anchorMax = new Vector2(0.40f, 0.48f);
             subRT.offsetMin = Vector2.zero;
             subRT.offsetMax = Vector2.zero;
             subtitleText = subObj.GetComponent<TextMeshProUGUI>();
             if (visionFont != null) subtitleText.font = visionFont;
-            subtitleText.fontSize = 12;
+            subtitleText.fontSize = 11;
             subtitleText.color = new Color(0.6f, 0.75f, 0.9f, 0.85f);
             subtitleText.text = "Detecting video devices...";
 
-            // 2.3 Action Buttons on Header (VisionOS Platter Pill Buttons)
-            // Switch Camera Button
-            CreateVisionPillButton(header.transform, "SwitchCam", "↻ Switch Cam", 
-                new Vector2(0.56f, 0.16f), new Vector2(0.84f, 0.84f), () => CycleNextCamera());
+            // 2.3 Action Buttons on Header (Clean, Non-Overlapping Hitboxes)
+            // (A) Switch Camera Button: anchors 0.42 to 0.65
+            CreateVisionPillButton(header.transform, "SwitchCam", "Switch Cam", 
+                new Vector2(0.42f, 0.16f), new Vector2(0.65f, 0.84f), 
+                new Color(0.12f, 0.20f, 0.32f, 0.95f), () => CycleNextCamera());
 
-            // Close Button (Circular Vision Pro style button)
+            // (B) + Add Cam Button: anchors 0.67 to 0.87
+            CreateVisionPillButton(header.transform, "AddCam", "+ Add Cam", 
+                new Vector2(0.67f, 0.16f), new Vector2(0.87f, 0.84f), 
+                new Color(0.08f, 0.28f, 0.25f, 0.95f), () => SpawnAdditionalWindow());
+
+            // (C) Close Button: anchors 0.89 to 0.97
             CreateVisionCloseButton(header.transform, "CloseBtn", 
-                new Vector2(0.88f, 0.16f), new Vector2(0.965f, 0.84f), () => SetWindowOpen(false));
+                new Vector2(0.89f, 0.16f), new Vector2(0.97f, 0.84f), () => CloseThisWindow());
 
             // 3. Center Screen: Video Container with RectMask2D (PERFECTLY CENTERED, NO SKEW)
             GameObject videoContainer = new GameObject("VideoContainer", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
@@ -295,7 +315,7 @@ namespace UR3eVR
 
             Image contBg = videoContainer.GetComponent<Image>();
             contBg.material = null;
-            contBg.color = new Color(0.03f, 0.04f, 0.06f, 0.98f);
+            contBg.color = new Color(0.02f, 0.03f, 0.05f, 0.98f);
 
             // Video Feed (RawImage) strictly centered and fitted to 16:9
             GameObject videoObj = new GameObject("VideoDisplay", typeof(RectTransform), typeof(RawImage), typeof(AspectRatioFitter));
@@ -309,7 +329,6 @@ namespace UR3eVR
 
             videoRawImage = videoObj.GetComponent<RawImage>();
             videoRawImage.color = Color.white;
-            // Native CanvasRenderer default material renders to BOTH EYES with 0 vertex displacement
             videoRawImage.material = null;
 
             var arf = videoObj.GetComponent<AspectRatioFitter>();
@@ -325,8 +344,8 @@ namespace UR3eVR
             grabBarObj = new GameObject("GrabHandleBar", typeof(RectTransform), typeof(Image), typeof(VRWindowDragger));
             grabBarObj.transform.SetParent(canvasObj.transform, false);
             RectTransform grabRT = grabBarObj.GetComponent<RectTransform>();
-            grabRT.anchorMin = new Vector2(0.32f, 0.025f);
-            grabRT.anchorMax = new Vector2(0.68f, 0.095f);
+            grabRT.anchorMin = new Vector2(0.30f, 0.025f);
+            grabRT.anchorMax = new Vector2(0.70f, 0.095f);
             grabRT.offsetMin = Vector2.zero;
             grabRT.offsetMax = Vector2.zero;
             grabRT.pivot = new Vector2(0.5f, 0.5f);
@@ -337,16 +356,16 @@ namespace UR3eVR
                 grabImg.sprite = roundedRectSprite;
                 grabImg.type = Image.Type.Sliced;
                 grabImg.material = visionElementMaterial;
-                grabImg.color = new Color(0.25f, 0.32f, 0.44f, 0.92f);
+                grabImg.color = new Color(0.12f, 0.16f, 0.24f, 0.95f); // Dark Slate Pill
             }
             else
             {
                 grabImg.material = null;
-                grabImg.color = new Color(0.18f, 0.22f, 0.32f, 0.90f);
+                grabImg.color = new Color(0.10f, 0.14f, 0.20f, 0.92f);
             }
 
             Outline grabOutline = grabBarObj.AddComponent<Outline>();
-            grabOutline.effectColor = new Color(1.0f, 1.0f, 1.0f, 0.25f);
+            grabOutline.effectColor = new Color(0.30f, 0.70f, 1.0f, 0.35f);
             grabOutline.effectDistance = new Vector2(1f, -1f);
 
             // Grab Bar Label
@@ -359,10 +378,10 @@ namespace UR3eVR
             glRT.offsetMax = Vector2.zero;
             var grabLabel = grabLabelObj.GetComponent<TextMeshProUGUI>();
             if (visionFont != null) grabLabel.font = visionFont;
-            grabLabel.fontSize = 12;
+            grabLabel.fontSize = 11;
             grabLabel.alignment = TextAlignmentOptions.Center;
-            grabLabel.color = new Color(0.9f, 0.95f, 1.0f, 0.90f);
-            grabLabel.text = "═══  GRAB TO MOVE  ═══";
+            grabLabel.color = new Color(0.85f, 0.92f, 1.0f, 0.90f);
+            grabLabel.text = "---  GRAB TO MOVE  ---";
 
             // Attach VRWindowDragger
             dragger = grabBarObj.GetComponent<VRWindowDragger>();
@@ -370,10 +389,13 @@ namespace UR3eVR
             dragger.handleImage = grabImg;
 
             // Initial Position in Front of User
-            RepositionWindowDefault();
+            if (!hasPositionedDefault)
+            {
+                RepositionWindowDefault();
+            }
         }
 
-        private void CreateVisionPillButton(Transform parent, string name, string label, Vector2 min, Vector2 max, Action onClick)
+        private void CreateVisionPillButton(Transform parent, string name, string label, Vector2 min, Vector2 max, Color normalColor, Action onClick)
         {
             GameObject btnObj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
             btnObj.transform.SetParent(parent, false);
@@ -391,25 +413,25 @@ namespace UR3eVR
                 img.sprite = roundedRectSprite;
                 img.type = Image.Type.Sliced;
                 img.material = visionElementMaterial;
-                img.color = new Color(0.20f, 0.32f, 0.52f, 0.95f);
+                img.color = normalColor;
             }
             else
             {
                 img.material = null;
-                img.color = new Color(0.14f, 0.24f, 0.40f, 0.95f);
+                img.color = normalColor;
             }
             img.raycastTarget = true;
 
             Button btn = btnObj.GetComponent<Button>();
             ColorBlock cb = btn.colors;
             cb.normalColor = Color.white;
-            cb.highlightedColor = new Color(1.3f, 1.3f, 1.3f, 1f);
-            cb.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
+            cb.highlightedColor = new Color(0.25f, 0.45f, 0.70f, 1f);
+            cb.pressedColor = new Color(0.08f, 0.12f, 0.20f, 1f);
             btn.colors = cb;
             btn.onClick.AddListener(() => onClick());
 
             Outline ol = btnObj.AddComponent<Outline>();
-            ol.effectColor = new Color(1f, 1f, 1f, 0.25f);
+            ol.effectColor = new Color(0.3f, 0.7f, 1.0f, 0.35f);
             ol.effectDistance = new Vector2(1f, -1f);
 
             GameObject txtObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -421,7 +443,7 @@ namespace UR3eVR
             tRT.offsetMax = Vector2.zero;
             TextMeshProUGUI txt = txtObj.GetComponent<TextMeshProUGUI>();
             if (visionFont != null) txt.font = visionFont;
-            txt.fontSize = 13;
+            txt.fontSize = 12;
             txt.fontStyle = FontStyles.Bold;
             txt.alignment = TextAlignmentOptions.Center;
             txt.color = Color.white;
@@ -449,60 +471,42 @@ namespace UR3eVR
                 img.sprite = roundedRectSprite;
                 img.type = Image.Type.Sliced;
                 img.material = visionElementMaterial;
-                img.color = new Color(0.50f, 0.18f, 0.22f, 0.95f);
+                img.color = new Color(0.45f, 0.14f, 0.18f, 0.95f);
             }
             else
             {
                 img.material = null;
-                img.color = new Color(0.40f, 0.15f, 0.18f, 0.95f);
+                img.color = new Color(0.38f, 0.12f, 0.15f, 0.95f);
             }
             img.raycastTarget = true;
 
             Button btn = btnObj.GetComponent<Button>();
             ColorBlock cb = btn.colors;
             cb.normalColor = Color.white;
-            cb.highlightedColor = new Color(1.3f, 1.3f, 1.3f, 1f);
-            cb.pressedColor = new Color(0.7f, 0.7f, 0.7f, 1f);
+            cb.highlightedColor = new Color(0.70f, 0.20f, 0.25f, 1f);
+            cb.pressedColor = new Color(0.20f, 0.05f, 0.08f, 1f);
             btn.colors = cb;
             btn.onClick.AddListener(() => onClick());
 
             Outline ol = btnObj.AddComponent<Outline>();
-            ol.effectColor = new Color(1f, 1f, 1f, 0.25f);
+            ol.effectColor = new Color(1f, 0.3f, 0.3f, 0.35f);
             ol.effectDistance = new Vector2(1f, -1f);
 
-            if (crossIconSprite != null)
-            {
-                GameObject iconObj = new GameObject("CrossIcon", typeof(RectTransform), typeof(Image));
-                iconObj.transform.SetParent(btnObj.transform, false);
-                RectTransform iRT = iconObj.GetComponent<RectTransform>();
-                iRT.anchorMin = new Vector2(0.2f, 0.2f);
-                iRT.anchorMax = new Vector2(0.8f, 0.8f);
-                iRT.offsetMin = Vector2.zero;
-                iRT.offsetMax = Vector2.zero;
-                Image iImg = iconObj.GetComponent<Image>();
-                iImg.sprite = crossIconSprite;
-                iImg.material = null;
-                iImg.color = Color.white;
-                iImg.raycastTarget = false;
-            }
-            else
-            {
-                GameObject txtObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
-                txtObj.transform.SetParent(btnObj.transform, false);
-                RectTransform tRT = txtObj.GetComponent<RectTransform>();
-                tRT.anchorMin = Vector2.zero;
-                tRT.anchorMax = Vector2.one;
-                tRT.offsetMin = Vector2.zero;
-                tRT.offsetMax = Vector2.zero;
-                TextMeshProUGUI txt = txtObj.GetComponent<TextMeshProUGUI>();
-                if (visionFont != null) txt.font = visionFont;
-                txt.fontSize = 15;
-                txt.fontStyle = FontStyles.Bold;
-                txt.alignment = TextAlignmentOptions.Center;
-                txt.color = Color.white;
-                txt.raycastTarget = false;
-                txt.text = "✕";
-            }
+            GameObject txtObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+            txtObj.transform.SetParent(btnObj.transform, false);
+            RectTransform tRT = txtObj.GetComponent<RectTransform>();
+            tRT.anchorMin = Vector2.zero;
+            tRT.anchorMax = Vector2.one;
+            tRT.offsetMin = Vector2.zero;
+            tRT.offsetMax = Vector2.zero;
+            TextMeshProUGUI txt = txtObj.GetComponent<TextMeshProUGUI>();
+            if (visionFont != null) txt.font = visionFont;
+            txt.fontSize = 14;
+            txt.fontStyle = FontStyles.Bold;
+            txt.alignment = TextAlignmentOptions.Center;
+            txt.color = Color.white;
+            txt.raycastTarget = false;
+            txt.text = "X";
 
             interactiveButtons.Add(btn);
         }
@@ -548,18 +552,7 @@ namespace UR3eVR
                 return;
             }
 
-            int selected = 0;
-            // Prefer real USB webcams over Quest virtual cameras
-            for (int i = 0; i < availableDevices.Length; i++)
-            {
-                string n = availableDevices[i].name.ToLower();
-                if (!n.Contains("quest") && !n.Contains("virtual"))
-                {
-                    selected = i;
-                    break;
-                }
-            }
-            OpenWebcamIndex(selected);
+            OpenWebcamIndex(currentCameraIndex);
         }
 
         public void OpenWebcamIndex(int idx)
@@ -582,7 +575,6 @@ namespace UR3eVR
                     videoRawImage.texture = webcamTexture;
                 }
 
-                // Clean defaultGraphicMaterial to prevent contamination of other UI buttons
                 if (Graphic.defaultGraphicMaterial.mainTexture != null)
                 {
                     Graphic.defaultGraphicMaterial.mainTexture = null;
@@ -606,6 +598,62 @@ namespace UR3eVR
             if (availableDevices == null || availableDevices.Length <= 1) return;
             int next = (currentCameraIndex + 1) % availableDevices.Length;
             OpenWebcamIndex(next);
+        }
+
+        /// <summary>
+        /// Spawn an additional independent Camera Monitor window in VR space!
+        /// Enables watching multiple live cameras side-by-side simultaneously.
+        /// </summary>
+        public static VRCameraWindow SpawnAdditionalWindow(int targetIndex = -1)
+        {
+            GameObject newObj = new GameObject("VRCameraWindow_" + (ActiveWindows.Count + 1));
+            var newWin = newObj.AddComponent<VRCameraWindow>();
+            newWin.isSecondaryWindow = true;
+
+            if (Instance != null)
+            {
+                newWin.visionWindowMaterial = Instance.visionWindowMaterial;
+                newWin.visionElementMaterial = Instance.visionElementMaterial;
+                newWin.windowGlassSprite = Instance.windowGlassSprite;
+                newWin.roundedRectSprite = Instance.roundedRectSprite;
+                newWin.roundedRectHighlightSprite = Instance.roundedRectHighlightSprite;
+                newWin.crossIconSprite = Instance.crossIconSprite;
+                newWin.visionFont = Instance.visionFont;
+
+                // Position cleanly offset to the right
+                if (Instance.canvasObj != null)
+                {
+                    Transform baseTr = Instance.canvasObj.transform;
+                    float offsetDist = 0.72f * Mathf.Max(1, ActiveWindows.Count - 1);
+                    newObj.transform.position = baseTr.position + baseTr.right * offsetDist;
+                    newObj.transform.rotation = baseTr.rotation;
+                    newWin.hasPositionedDefault = true;
+                }
+
+                if (targetIndex >= 0)
+                {
+                    newWin.currentCameraIndex = targetIndex;
+                }
+                else if (Instance.availableDevices != null && Instance.availableDevices.Length > 0)
+                {
+                    newWin.currentCameraIndex = (Instance.currentCameraIndex + ActiveWindows.Count) % Instance.availableDevices.Length;
+                }
+            }
+
+            Debug.Log($"[VRCameraWindow] Spawned additional Camera Window #{ActiveWindows.Count}");
+            return newWin;
+        }
+
+        public void CloseThisWindow()
+        {
+            if (isSecondaryWindow)
+            {
+                Destroy(gameObject);
+            }
+            else
+            {
+                SetWindowOpen(false);
+            }
         }
 
         private void StopCurrentStream()
@@ -666,16 +714,6 @@ namespace UR3eVR
             {
                 if (webcamTexture != null && webcamTexture.isPlaying) webcamTexture.Pause();
             }
-        }
-
-        public void ToggleWindow()
-        {
-            SetWindowOpen(!isOpen);
-        }
-
-        private void OnDestroy()
-        {
-            StopCurrentStream();
         }
     }
 }

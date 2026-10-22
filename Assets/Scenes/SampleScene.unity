@@ -2916,8 +2916,8 @@ MonoBehaviour:
   maxRotSpeed: 0.25
   smoothing: 0.5
   rotSmoothing: 0.5
-  requireDockAtHomeToStart: 1
-  isTrackingEngaged: 0
+  requireDockAtHomeToStart: 0
+  isTrackingEngaged: 1
   dockDwellTimeRequired: 0.35
   currentDockTime: 0
   isHandTracked: 0

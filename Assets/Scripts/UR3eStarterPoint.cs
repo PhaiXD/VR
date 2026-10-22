@@ -30,7 +30,7 @@ namespace UR3eVR
         public bool showCoordinateAxes = true;
 
         [Tooltip("แสดงป้ายข้อความ 3D ลอยตัว")]
-        public bool showLabel = true;
+        public bool showLabel = false;
 
         [Tooltip("ขนาดของจุด Starter Point")]
         [Range(0.01f, 0.15f)]
@@ -213,7 +213,9 @@ namespace UR3eVR
             // อัปเดตป้ายข้อความ World Space Billboard
             if (labelObj != null)
             {
-                labelObj.SetActive(showLabel);
+                // Auto-hide label if hand is within 25cm to NEVER block the hand or teleoperation view
+                bool shouldDisplayLabel = showLabel && (distanceToHome > 0.25f);
+                labelObj.SetActive(shouldDisplayLabel);
                 if (showLabel && headTransform != null)
                 {
                     Vector3 lookDir = labelObj.transform.position - headTransform.position;
@@ -231,7 +233,7 @@ namespace UR3eVR
                             {
                                 float pct = Mathf.Clamp01((vrHandMover != null ? vrHandMover.currentDockTime : 0f) / Mathf.Max(0.01f, (vrHandMover != null ? vrHandMover.dockDwellTimeRequired : 0.35f)));
                                 labelText.text = string.Format(
-                                    "<size=22><b><color=#00FF88>★ DOCKED AT HOME! ★</color></b></size>\n" +
+                                    "<size=20><b><color=#00FF88>DOCKED AT HOME</color></b></size>\n" +
                                     "<size=16><color=#FFFFFF>กำลังเชื่อมต่อระบบควบคุม... [{0:P0}]</color></size>\n" +
                                     "<size=14><color=#00E5FF>กรุณาถือมือนิ่งไว้เพื่อเริ่ม</color></size>",
                                     pct
@@ -240,7 +242,7 @@ namespace UR3eVR
                             else
                             {
                                 labelText.text = string.Format(
-                                    "<size=22><b><color=#FFD54F>👉 กรุณาวางมือที่จุด Home เพื่อเริ่ม 👈</color></b></size>\n" +
+                                    "<size=18><b><color=#FFD54F>Home Point</color></b></size>\n" +
                                     "<size=16><color=#FFFFFF>Place Right Hand at Home Point to Engage</color></size>\n" +
                                     "<size=14><color=#00E5FF>ระยะห่าง: {0:F1} cm  ▼  ▼  ▼</color></size>",
                                     distanceToHome * 100f
@@ -250,7 +252,7 @@ namespace UR3eVR
                         else if (engagedCelebrationTimer > 0f)
                         {
                             labelText.text = 
-                                "<size=22><b><color=#00FF88>✅ ROBOT ENGAGED! READY! ✅</color></b></size>\n" +
+                                "<size=20><b><color=#00FF88>TELEOPERATION ACTIVE</color></b></size>\n" +
                                 "<size=16><color=#FFFFFF>หุ่นยนต์เริ่มขยับตามมือแล้ว!</color></size>\n" +
                                 "<size=14><color=#00E5FF>ขยับมือเพื่อควบคุมการผสมสารเคมีได้ทันที</color></size>";
                         }
@@ -368,7 +370,7 @@ namespace UR3eVR
 
             labelObj = new GameObject("Home_Label_Canvas");
             labelObj.transform.SetParent(transform, false);
-            labelObj.transform.localPosition = new Vector3(0f, markerScale * 0.75f + 0.055f, 0f);
+            labelObj.transform.localPosition = new Vector3(0f, markerScale * 0.75f + 0.12f, 0f);
 
             labelCanvas = labelObj.AddComponent<Canvas>();
             labelCanvas.renderMode = RenderMode.WorldSpace;
@@ -379,7 +381,7 @@ namespace UR3eVR
 
             RectTransform canvasRT = labelObj.GetComponent<RectTransform>();
             canvasRT.sizeDelta = new Vector2(460f, 150f);
-            canvasRT.localScale = Vector3.one * 0.00085f;
+            canvasRT.localScale = Vector3.one * 0.00035f;
 
             // Frosted Obsidian Background Card
             labelBg = labelObj.AddComponent<Image>();

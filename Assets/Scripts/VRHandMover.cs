@@ -102,7 +102,7 @@ namespace UR3eVR
 
         [Header("Home Docking Engagement (Safety Interlock)")]
         [Tooltip("ต้องการให้วางมือที่จุด Home ก่อนหุ่นยนต์ถึงจะเริ่มขยับตามมือ")]
-        public bool requireDockAtHomeToStart = true;
+        public bool requireDockAtHomeToStart = false;
         [Tooltip("สถานะว่าเชื่อมโยงและเริ่มควบคุมหุ่นยนต์แล้วหรือยัง (ต้องวางมือที่ Home ก่อน)")]
         public bool isTrackingEngaged = false;
         [Tooltip("เวลาที่ต้องวางมือแช่ไว้ที่ Home เพื่อยืนยันการเริ่มทำงาน (วินาที)")]

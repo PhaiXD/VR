@@ -515,6 +515,16 @@ namespace UR3eVR
                 return;
             }
 
+            var addBtn = CreateSimpleButton(camButtonContainer, "<b>+ Open Additional Camera Window</b>", 50, new Color(0.08f, 0.42f, 0.36f, 0.95f), Color.white, () =>
+            {
+                VRCameraWindow.SpawnAdditionalWindow();
+                ShowToast("Spawned New Camera Window!");
+                AddLog("CAMERA", "Opened additional camera monitor in VR");
+                HapticPulse(0.6f, 0.15f);
+                PopulateCameraList();
+            });
+            dynamicCamButtons.Add(addBtn);
+
             for (int i = 0; i < devices.Length; i++)
             {
                 int deviceIdx = i;
@@ -529,7 +539,7 @@ namespace UR3eVR
 
                 bool isActive = (i == activeIndex);
 
-                string label = isActive ? $"â˜… [ACTIVE] {deviceIdx}: {devName}" : $"ðŸ“¹ {deviceIdx}: {devName}";
+                string label = isActive ? $"[ACTIVE] {deviceIdx}: {devName}" : $"[CAM] {deviceIdx}: {devName}";
                 Color bgCol = isActive ? new Color(0.0f, 0.45f, 0.40f, 0.95f) : new Color(0.12f, 0.16f, 0.24f, 0.95f);
                 Color textCol = isActive ? new Color(0.2f, 1.0f, 0.8f, 1.0f) : Color.white;
 
@@ -968,7 +978,7 @@ namespace UR3eVR
             grabLabel.fontSize = 13;
             grabLabel.alignment = TextAnchor.MiddleCenter;
             grabLabel.color = new Color(0.8f, 0.9f, 1.0f, 0.85f);
-            grabLabel.text = "\u2550\u2550\u2550  GRAB TO MOVE  \u2550\u2550\u2550";
+            grabLabel.text = "---  GRAB TO MOVE  ---";
 
             var dragger = grabBar.AddComponent<VRWindowDragger>();
             dragger.windowTransform = canvasObj.transform;
@@ -1145,7 +1155,7 @@ namespace UR3eVR
             alertBannerImage = alertBannerObj.AddComponent<Image>();
             alertBannerImage.material = stereoUIMaterial;
             alertBannerImage.color = new Color(0.95f, 0.70f, 0.05f, 0.95f);
-            alertBannerText = CreateText(alertBannerObj.transform, "âš ï¸ ALERT", 16, Color.black, TextAnchor.MiddleCenter);
+            alertBannerText = CreateText(alertBannerObj.transform, "[!] SYSTEM ALERT", 16, Color.black, TextAnchor.MiddleCenter);
             alertBannerText.fontStyle = FontStyle.Bold;
             alertBannerObj.SetActive(false);
 
