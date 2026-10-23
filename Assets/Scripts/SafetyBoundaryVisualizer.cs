@@ -52,6 +52,13 @@ namespace UR3eVR
         [Header("Singularity Warning (Z-axis Magenta)")]
         public Color singularityColor = new Color(1.0f, 0.05f, 0.95f, 0.95f);
 
+        [Header("Shader & Ambient Visibility (Build-Safe)")]
+        [Tooltip("Shader สำหรับแสดงตาข่าย Barrier (หากเว้นว่างจะค้นหาอัตโนมัติหรือดึงจาก Resources)")]
+        public Shader barrierShader;
+        [Tooltip("ความโปร่งแสงต่ำสุดของโครงข่ายแม้ยังไม่เข้าใกล้ (0.05 = เห็นโครงข่ายจางๆ สวยงามตลอดเวลา, 0 = ซ่อนสนิท)")]
+        [Range(0.0f, 0.30f)]
+        public float minAmbientVisibility = 0.05f;
+
         [Header("Proximity Patch Settings")]
         [Tooltip("รัศมีวงสว่างเฉพาะจุดบนผิว Barrier รอบมือ (เมตร)")]
         [Range(0.15f, 0.60f)]
@@ -218,26 +225,66 @@ namespace UR3eVR
             baseLabelText.alignment = TextAnchor.MiddleCenter;
             baseLabelText.color = Color.white;
             baseLabelText.supportRichText = true;
-            baseLabelText.text = "<b><color=#00E5FF>🤖 UR3e Base (0, 0, 0)</color></b>\n<size=15><color=#90CAF9>Robot Origin Frame</color></size>";
+            baseLabelText.text = "<b><color=#00E5FF>UR3e Base (0, 0, 0)</color></b>\n<size=15><color=#90CAF9>Robot Origin Frame</color></size>";
         }
 
         private void CreateBarrierSpheres()
         {
-            Shader barrierShader = Shader.Find("UR3eVR/SafetyGridSphere");
             if (barrierShader == null)
             {
-                Debug.LogError("[SafetyBoundaryVisualizer] ไม่พบ Shader 'UR3eVR/SafetyGridSphere'!");
+                // 1. Try loading from bundled Resources Material
+                Material resOuter = Resources.Load<Material>("Materials/SafetyBarrierOuter");
+                if (resOuter != null && resOuter.shader != null)
+                {
+                    barrierShader = resOuter.shader;
+                }
+            }
+
+            if (barrierShader == null)
+            {
+                // 2. Try Shader.Find custom shader
+                barrierShader = Shader.Find("UR3eVR/SafetyGridSphere");
+            }
+
+            // 3. Fallbacks guaranteed to be compiled in every Unity Standalone build
+            bool isFallback = false;
+            if (barrierShader == null)
+            {
+                barrierShader = Shader.Find("Universal Render Pipeline/Unlit");
+                if (barrierShader == null) barrierShader = Shader.Find("Sprites/Default");
+                if (barrierShader == null) barrierShader = Shader.Find("Unlit/Color");
+                isFallback = true;
+                Debug.LogWarning("[SafetyBoundaryVisualizer] UR3eVR/SafetyGridSphere not found in build! Falling back to: " + (barrierShader != null ? barrierShader.name : "null"));
+            }
+
+            if (barrierShader == null)
+            {
+                Debug.LogError("[SafetyBoundaryVisualizer] Could not resolve any shader for safety barriers!");
                 return;
             }
 
-            // 1. สร้าง Outer Boundary Sphere (ขอบเขตนอก - สีแดง)
+            // 1. สร้าง Outer Boundary Sphere (ขอบเขตภายนอก - สีแดง)
             outerMat = new Material(barrierShader);
             outerMat.name = "Mat_OuterSafetyBarrier";
             outerMat.SetColor("_BaseColor", outerColor);
-            outerMat.SetFloat("_GridDensity", 24.0f);
-            outerMat.SetFloat("_LineWidth", 0.08f);
-            outerMat.SetFloat("_FocusRadius", focusSpotRadius);
-            outerMat.SetFloat("_ApproachAlpha", 0.0f);
+            if (!isFallback)
+            {
+                outerMat.SetFloat("_GridDensity", 24.0f);
+                outerMat.SetFloat("_LineWidth", 0.08f);
+                outerMat.SetFloat("_FocusRadius", focusSpotRadius);
+                outerMat.SetFloat("_ApproachAlpha", minAmbientVisibility);
+            }
+            else
+            {
+                outerMat.SetFloat("_Surface", 1);
+                outerMat.SetFloat("_Blend", 0);
+                outerMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                outerMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                outerMat.SetInt("_ZWrite", 0);
+                Color c = outerColor;
+                c.a = minAmbientVisibility;
+                outerMat.SetColor("_BaseColor", c);
+            }
             outerMat.renderQueue = 2980;
             outerMat.enableInstancing = true;
 
@@ -253,14 +300,28 @@ namespace UR3eVR
             outerRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             outerRenderer.receiveShadows = false;
 
-            // 2. สร้าง Inner Boundary Sphere (ขอบเขตในร่วมศูนย์กลางที่ Base - สีส้ม/แอมเบอร์)
+            // 2. สร้าง Inner Boundary Sphere (ขอบเขตจุดบอดใกล้ Base - สีส้ม/เหลือง)
             innerMat = new Material(barrierShader);
             innerMat.name = "Mat_InnerSafetyBarrier";
             innerMat.SetColor("_BaseColor", innerColor);
-            innerMat.SetFloat("_GridDensity", 20.0f);
-            innerMat.SetFloat("_LineWidth", 0.08f);
-            innerMat.SetFloat("_FocusRadius", focusSpotRadius);
-            innerMat.SetFloat("_ApproachAlpha", 0.0f);
+            if (!isFallback)
+            {
+                innerMat.SetFloat("_GridDensity", 20.0f);
+                innerMat.SetFloat("_LineWidth", 0.08f);
+                innerMat.SetFloat("_FocusRadius", focusSpotRadius);
+                innerMat.SetFloat("_ApproachAlpha", minAmbientVisibility);
+            }
+            else
+            {
+                innerMat.SetFloat("_Surface", 1);
+                innerMat.SetFloat("_Blend", 0);
+                innerMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                innerMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                innerMat.SetInt("_ZWrite", 0);
+                Color c = innerColor;
+                c.a = minAmbientVisibility;
+                innerMat.SetColor("_BaseColor", c);
+            }
             innerMat.renderQueue = 2980;
             innerMat.enableInstancing = true;
 
@@ -418,8 +479,10 @@ namespace UR3eVR
             }
 
             float dt = Time.deltaTime;
-            outerApproachAlpha = Mathf.Lerp(outerApproachAlpha, targetOuterAlpha, Mathf.Clamp01(16.0f * dt));
-            innerApproachAlpha = Mathf.Lerp(innerApproachAlpha, targetInnerAlpha, Mathf.Clamp01(16.0f * dt));
+            float desiredOuter = Mathf.Max(targetOuterAlpha, minAmbientVisibility);
+            float desiredInner = Mathf.Max(targetInnerAlpha, minAmbientVisibility);
+            outerApproachAlpha = Mathf.Lerp(outerApproachAlpha, desiredOuter, Mathf.Clamp01(16.0f * dt));
+            innerApproachAlpha = Mathf.Lerp(innerApproachAlpha, desiredInner, Mathf.Clamp01(16.0f * dt));
 
             // 6. อัปเดต Shader ของ Outer Barrier
             UpdateBarrierShader(outerMat, outerSphereObj, outerRenderer, outerColor, handPos, outerApproachAlpha, distToBase / outerRadius >= 0.90f);
@@ -433,8 +496,7 @@ namespace UR3eVR
         {
             if (mat == null || obj == null || rend == null) return;
 
-            // หากมืออยู่ไกลและ approachAlpha แทบเป็น 0 ให้ปิด MeshRenderer เพื่อลดโหลด
-            if (approachAlpha <= 0.003f)
+            if (approachAlpha <= 0.001f)
             {
                 if (rend.enabled) rend.enabled = false;
                 return;
@@ -442,27 +504,41 @@ namespace UR3eVR
 
             if (!rend.enabled) rend.enabled = true;
 
-            // อัปเดตตำแหน่งมือสำหรับคำนวณจุดสว่างเฉพาะจุด (Proximity Spot)
-            mat.SetVector("_HandPosWS", new Vector4(handPos.x, handPos.y, handPos.z, 1.0f));
-            mat.SetFloat("_FocusRadius", focusSpotRadius);
-            mat.SetFloat("_ApproachAlpha", approachAlpha);
+            if (mat.HasProperty("_HandPosWS"))
+            {
+                mat.SetVector("_HandPosWS", new Vector4(handPos.x, handPos.y, handPos.z, 1.0f));
+            }
+            if (mat.HasProperty("_FocusRadius"))
+            {
+                mat.SetFloat("_FocusRadius", focusSpotRadius);
+            }
+            if (mat.HasProperty("_ApproachAlpha"))
+            {
+                mat.SetFloat("_ApproachAlpha", approachAlpha);
+            }
 
-            // Tint สี Singularity หากเข้าใกล้แกน Z
             Color activeColor = baseCol;
             if (gripperBridge != null && gripperBridge.safetyCylinderRatio > 0.50f)
             {
                 float blend = Mathf.InverseLerp(0.50f, 0.90f, gripperBridge.safetyCylinderRatio);
                 activeColor = Color.Lerp(baseCol, singularityColor, blend);
             }
+
+            if (!mat.HasProperty("_ApproachAlpha"))
+            {
+                activeColor.a = Mathf.Clamp01(baseCol.a * approachAlpha);
+            }
             mat.SetColor("_BaseColor", activeColor);
 
-            // Pulse กะพริบเร็วในโซนอันตราย
             float pulse = 1.0f;
             if (isDanger)
             {
                 pulse = 1.0f + 0.45f * Mathf.Sin(Time.time * 5.0f * Mathf.PI * 2.0f);
             }
-            mat.SetFloat("_Pulse", pulse);
+            if (mat.HasProperty("_Pulse"))
+            {
+                mat.SetFloat("_Pulse", pulse);
+            }
         }
 
         private void DestroyCollider(GameObject go)

@@ -1,3 +1,4 @@
+// Recompile trigger: 1792728559.5519507
 using System;
 using UnityEngine;
 
@@ -11,6 +12,7 @@ namespace UR3eVR
 
     public class VRHandMover : MonoBehaviour
     {
+        public static VRHandMover Instance { get; private set; }
         [Header("Tracking Mode")]
         [Tooltip("TargetPose: Closed-loop | Velocity: Open-loop")]
         public VRTrackingMode trackingMode = VRTrackingMode.TargetPose;
@@ -138,6 +140,25 @@ namespace UR3eVR
         private bool hasSyncedInitialRobotPose = false;
         private OneEuroFilterVector3 posFilter = new OneEuroFilterVector3();
         private OneEuroFilterQuaternion rotFilter = new OneEuroFilterQuaternion();
+
+        private void Awake()
+        {
+            if (Instance == null)
+            {
+                Instance = this;
+            }
+            else if (Instance != this)
+            {
+                Debug.LogWarning("[VRHandMover] Multiple VRHandMover instances detected! Destroying duplicate.");
+                Destroy(this);
+                return;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+        }
 
         private void Start()
         {

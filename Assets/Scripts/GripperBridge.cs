@@ -32,28 +32,30 @@ namespace UR3eVR
         [System.NonSerialized] public List<SystemAlert> recentAlerts = new List<SystemAlert>();
         private readonly Queue<SystemAlert> pendingAlertsQueue = new Queue<SystemAlert>();
         private readonly object alertLock = new object();
+        [Header("VRHandMover Reference (Auto-detected)")]
+        public VRHandMover vrHandMover;
 
         [Header("Network Settings")]
-        [Tooltip("IP Address à¸‚à¸­à¸‡à¹€à¸„à¸£à¸·à¹ˆà¸­à¸‡à¸—à¸µà¹ˆà¸£à¸±à¸™ vr_bridge_server.py")]
+        [Tooltip("IP Address ของเครื่องที่รัน test_move.py หรือ vr_bridge_server.py")]
         public string serverIp = "127.0.0.1";
 
-        [Tooltip("Port à¸‚à¸­à¸‡ VR Bridge Server (default: 5555)")]
+        [Tooltip("Port ของ VR Bridge Server (default: 5555)")]
         public int serverPort = 5555;
 
-        [Tooltip("à¸­à¸±à¸•à¸£à¸²à¸à¸²à¸£à¸ªà¹ˆà¸‡à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸ªà¸¹à¸‡à¸ªà¸¸à¸” (Hz) - à¸›à¸£à¸±à¸šà¸¥à¸”à¹€à¸žà¸·à¹ˆà¸­à¹à¸à¹‰à¸›à¸±à¸à¸«à¸² Delay à¸ˆà¸²à¸à¸à¸²à¸£à¸ªà¹ˆà¸‡à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸–à¸µà¹ˆà¹€à¸à¸´à¸™à¹„à¸›")]
+        [Tooltip("อัตราการส่งข้อมูลสูงสุด (Hz) ปรับลดเพื่อแก้ปัญหา Delay")]
         [Range(5, 30)]
         public int sendRateHz = 50;
 
-        [Header("Significant Change Thresholds (à¸ªà¹ˆà¸‡à¹€à¸‰à¸žà¸²à¸°à¸ˆà¸¸à¸”à¸™à¸±à¸¢à¸ªà¸³à¸„à¸±à¸)")]
-        [Tooltip("à¸£à¸°à¸¢à¸°à¹€à¸„à¸¥à¸·à¹ˆà¸­à¸™à¸—à¸µà¹ˆà¸‚à¸±à¹‰à¸™à¸•à¹ˆà¸³à¸—à¸µà¹ˆà¸–à¸·à¸­à¸§à¹ˆà¸²à¸¡à¸µà¸™à¸±à¸¢à¸ªà¸³à¸„à¸±à¸ (à¹€à¸¡à¸•à¸£): à¹€à¸Šà¹ˆà¸™ 0.0015 = 1.5 mm à¸«à¸²à¸à¸‚à¸¢à¸±à¸šà¸™à¹‰à¸­à¸¢à¸à¸§à¹ˆà¸²à¸™à¸µà¹‰à¸ˆà¸°à¹„à¸¡à¹ˆà¸ªà¹ˆà¸‡à¸‹à¹‰à¸³à¸‹à¹‰à¸­à¸™")]
+        [Header("Significant Change Thresholds (ส่งเฉพาะจุดที่มีนัยสำคัญ)")]
+        [Tooltip("ระยะเคลื่อนที่ขั้นต่ำที่มีนัยสำคัญ (เมตร): เช่น 0.0015 = 1.5 mm หากขยับน้อยกว่านี้จะไม่ส่งซ้ำซ้อน")]
         [Range(0.0005f, 0.01f)]
         public float posChangeThreshold = 0.0006f; // 1.5 mm
 
-        [Tooltip("à¸­à¸‡à¸¨à¸²à¸à¸²à¸£à¸«à¸¡à¸¸à¸™à¸‚à¹‰à¸­à¸¡à¸·à¸­à¸‚à¸±à¹‰à¸™à¸•à¹ˆà¸³à¸—à¸µà¹ˆà¸–à¸·à¸­à¸§à¹ˆà¸²à¸¡à¸µà¸™à¸±à¸¢à¸ªà¸³à¸„à¸±à¸ (à¸­à¸‡à¸¨à¸²): à¹€à¸Šà¹ˆà¸™ 0.8Â° à¸«à¸²à¸à¸«à¸¡à¸¸à¸™à¸™à¹‰à¸­à¸¢à¸à¸§à¹ˆà¸²à¸™à¸µà¹‰à¸ˆà¸°à¹„à¸¡à¹ˆà¸ªà¹ˆà¸‡à¸‹à¹‰à¸³à¸‹à¹‰à¸­à¸™")]
+        [Tooltip("องศาการหมุนข้อมือขั้นต่ำที่มีนัยสำคัญ (องศา): เช่น 0.8 องศา")]
         [Range(0.2f, 3.0f)]
         public float rotChangeThreshold = 0.35f; // 0.8 degrees
 
-        [Tooltip("à¸Šà¹ˆà¸§à¸‡à¹€à¸§à¸¥à¸²à¸ªà¹ˆà¸‡ Heartbeat à¸‹à¹‰à¸³à¹€à¸¡à¸·à¹ˆà¸­à¸¡à¸·à¸­à¸™à¸´à¹ˆà¸‡à¸ªà¸™à¸´à¸— (à¸§à¸´à¸™à¸²à¸—à¸µ) à¹€à¸žà¸·à¹ˆà¸­à¸¢à¸·à¸™à¸¢à¸±à¸™à¸ªà¸–à¸²à¸™à¸°à¸à¸±à¸š Python")]
+        [Tooltip("ช่วงเวลาส่ง Heartbeat ซ้ำเมื่อมือนิ่งสนิท (วินาที)")]
         [Range(0.5f, 3.0f)]
         public float heartbeatIntervalSec = 0.12f;
 
@@ -62,7 +64,7 @@ namespace UR3eVR
         public PinchDetector pinchDetector;
 
         [Header("Gripper Settings")]
-        [Tooltip("Deadband à¸›à¹‰à¸­à¸‡à¸à¸±à¸™à¸à¸²à¸£à¸ªà¹ˆà¸‡à¸„à¹ˆà¸²à¸‹à¹‰à¸³à¹†")]
+        [Tooltip("Deadband ป้องกันการส่งค่าซ้ำๆ")]
         [Range(1, 10)]
         public int deadband = 3;
 
@@ -125,7 +127,7 @@ namespace UR3eVR
         private bool newPoseAvailable = false;
 
         [Header("Auto-Tare (Calibrate Fz when opening fingers)")]
-        [Tooltip("à¸£à¸°à¸”à¸±à¸šà¸•à¸³à¹à¸«à¸™à¹ˆà¸‡à¸­à¹‰à¸²à¸™à¸´à¹‰à¸§à¸—à¸µà¹ˆà¸ˆà¸°à¸ªà¸±à¹ˆà¸‡ Calibrate Tare Fz à¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´ (default: 35)")]
+        [Tooltip("ระดับตำแหน่งอ้านิ้วที่จะสั่ง Tare Fz อัตโนมัติ (default: 35)")]
         [Range(10, 80)]
         public int autoTareThreshold = 35;
         public bool isCalibratedAtOpen = false;
@@ -192,8 +194,13 @@ namespace UR3eVR
 
             // 2. Read Gripper input: Touch Controller Index Trigger or Bare Hand Pinch
             // Determine whether user is holding Touch Controller or using Bare Hand Tracking
+            if (vrHandMover == null)
+            {
+                vrHandMover = VRHandMover.Instance != null ? VRHandMover.Instance : FindAnyObjectByType<VRHandMover>();
+            }
+
             bool usingController = false;
-            if (VRHandMover.Instance != null && VRHandMover.Instance.isUsingController)
+            if (vrHandMover != null && vrHandMover.isUsingController)
             {
                 usingController = true;
             }

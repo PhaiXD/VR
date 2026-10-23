@@ -5,8 +5,8 @@ namespace UR3eVR
 {
     /// <summary>
     /// LeftHandHomeTrigger: เมนูควบคุมด่วนเมื่อจีบมือซ้าย (Left Hand Quick Action Menu)
-    /// 1. 🏠 SET HOME: สั่งหุ่นยนต์ UR3e กลับสู่ Safe Home พร้อม Reset จุด Center Point (Anchor) ใน Unity
-    /// 2. 🔒 / 🔓 GRIPPER LOCK: ล็อกระดับการหนีบของ Gripper ไม่ให้เปลี่ยนตามนิ้วมือขวา (กดซ้ำที่ Icon เพื่อปลดล็อก)
+    /// 1.  SET HOME: สั่งหุ่นยนต์ UR3e กลับสู่ Safe Home พร้อม Reset จุด Center Point (Anchor) ใน Unity
+    /// 2.  /  GRIPPER LOCK: ล็อกระดับการหนีบของ Gripper ไม่ให้เปลี่ยนตามนิ้วมือขวา (กดซ้ำที่ Icon เพื่อปลดล็อก)
     /// 
     /// รองรับการสั่งการ 3 รูปแบบ:
     /// - ใช้นิ้วชี้ขวาแตะที่ Icon โดยตรงในพื้นที่ 3D (Direct Touch / Poke)
@@ -371,7 +371,7 @@ namespace UR3eVR
 
         public void TriggerHomeAndRecenter()
         {
-            Debug.Log("[LeftActionMenu] 🏠 Trigger SET HOME & RECENTER");
+            Debug.Log("[LeftActionMenu]  Trigger SET HOME & RECENTER");
 
             // 1. สั่งหุ่นยนต์ UR3e กลับ Safe Home (ส่ง HOME ไป Python)
             if (gripperBridge != null)
@@ -399,7 +399,7 @@ namespace UR3eVR
                 locked = gripperBridge.ToggleGripperLock();
             }
 
-            Debug.Log(string.Format("[LeftActionMenu] 🔒 Toggle Gripper Lock: {0}", locked ? "LOCKED" : "UNLOCKED"));
+            Debug.Log(string.Format("[LeftActionMenu]  Toggle Gripper Lock: {0}", locked ? "LOCKED" : "UNLOCKED"));
 
             isSuccessState = true;
             lastTriggeredAction = locked ? "LOCKED" : "UNLOCKED";
@@ -442,7 +442,7 @@ namespace UR3eVR
             homeTextObj.transform.localPosition = new Vector3(0f, 0f, -0.002f);
             homeTextObj.transform.localScale = Vector3.one * 0.0012f;
             homeTextMesh = homeTextObj.AddComponent<TextMesh>();
-            SetupTextMesh(homeTextMesh, "🏠\nSET HOME\n(UR3e + Center)");
+            SetupTextMesh(homeTextMesh, "SET HOME\n(UR3e + Center)");
 
             // ==================== 2. ปุ่ม Gripper Lock (ขวา) ====================
             lockButtonObj = new GameObject("Btn_Lock");
@@ -467,7 +467,7 @@ namespace UR3eVR
             lockTextObj.transform.localPosition = new Vector3(0f, 0f, -0.002f);
             lockTextObj.transform.localScale = Vector3.one * 0.0012f;
             lockTextMesh = lockTextObj.AddComponent<TextMesh>();
-            SetupTextMesh(lockTextMesh, "🔓\nGRIPPER\nFREE\n(Tap to Lock)");
+            SetupTextMesh(lockTextMesh, "GRIPPER\nFREE\n(Tap to Lock)");
 
             menuRoot.SetActive(false);
         }
@@ -567,7 +567,7 @@ namespace UR3eVR
             // ==================== 1. อัปเดตปุ่ม Home ====================
             if (isSuccessState && lastTriggeredAction == "HOME")
             {
-                homeTextMesh.text = "✅\nHOMED!\n(Center Reset)";
+                homeTextMesh.text = "HOMED!\n(Center Reset)";
                 homeTextMesh.color = Color.green;
                 homeBgCircle.startColor = Color.green;
                 homeBgCircle.endColor = Color.green;
@@ -577,7 +577,7 @@ namespace UR3eVR
             {
                 bool isHomeHovered = (currentHoveredOption == ActionOption.Home);
                 Color homeColor = isHomeHovered ? Color.yellow : Color.cyan;
-                homeTextMesh.text = isHomeHovered ? string.Format("🏠\nSET HOME\n[{0}%]", Mathf.RoundToInt(dwellProgress * 100f)) : "🏠\nSET HOME\n(UR3e + Center)";
+                homeTextMesh.text = isHomeHovered ? string.Format("SET HOME\n[{0}%]", Mathf.RoundToInt(dwellProgress * 100f)) : "SET HOME\n(UR3e + Center)";
                 homeTextMesh.color = homeColor;
                 homeBgCircle.startColor = new Color(homeColor.r, homeColor.g, homeColor.b, 0.5f);
                 homeBgCircle.endColor = new Color(homeColor.r, homeColor.g, homeColor.b, 0.5f);
@@ -589,7 +589,7 @@ namespace UR3eVR
             {
                 if (lastTriggeredAction == "LOCKED")
                 {
-                    lockTextMesh.text = string.Format("🔒\nLOCKED!\n({0}%)", gripPct);
+                    lockTextMesh.text = string.Format("LOCKED!\n({0}%)", gripPct);
                     lockTextMesh.color = new Color(1f, 0.8f, 0.1f);
                     lockBgCircle.startColor = new Color(1f, 0.8f, 0.1f);
                     lockBgCircle.endColor = new Color(1f, 0.8f, 0.1f);
@@ -597,7 +597,7 @@ namespace UR3eVR
                 }
                 else
                 {
-                    lockTextMesh.text = "🔓\nUNLOCKED!\n(Live Tracking)";
+                    lockTextMesh.text = "UNLOCKED!\n(Live Tracking)";
                     lockTextMesh.color = Color.cyan;
                     lockBgCircle.startColor = Color.cyan;
                     lockBgCircle.endColor = Color.cyan;
@@ -615,8 +615,8 @@ namespace UR3eVR
                     lockColor = isLockHovered ? Color.yellow : new Color(1f, 0.75f, 0.1f);
                     float pulse = 0.85f + 0.15f * Mathf.Sin(Time.time * 6f);
                     lockTextMesh.text = isLockHovered 
-                        ? string.Format("🔒\nUNLOCK?\n[{0}%]", Mathf.RoundToInt(dwellProgress * 100f))
-                        : string.Format("🔒\nLOCKED ({0}%)\n(Tap to Unlock)", gripPct);
+                        ? string.Format("UNLOCK?\n[{0}%]", Mathf.RoundToInt(dwellProgress * 100f))
+                        : string.Format("LOCKED ({0}%)\n(Tap to Unlock)", gripPct);
                     lockTextMesh.color = lockColor * pulse;
                     lockBgCircle.startColor = lockColor;
                     lockBgCircle.endColor = lockColor;
@@ -626,8 +626,8 @@ namespace UR3eVR
                     // สถานะปกติ (ยังไม่ล็อก)
                     lockColor = isLockHovered ? Color.yellow : new Color(0.2f, 0.8f, 1f);
                     lockTextMesh.text = isLockHovered 
-                        ? string.Format("🔒\nLOCK GRIP\n[{0}%]", Mathf.RoundToInt(dwellProgress * 100f))
-                        : "🔓\nGRIPPER\nFREE\n(Tap to Lock)";
+                        ? string.Format("LOCK GRIP\n[{0}%]", Mathf.RoundToInt(dwellProgress * 100f))
+                        : "GRIPPER\nFREE\n(Tap to Lock)";
                     lockTextMesh.color = lockColor;
                     lockBgCircle.startColor = new Color(lockColor.r, lockColor.g, lockColor.b, 0.5f);
                     lockBgCircle.endColor = new Color(lockColor.r, lockColor.g, lockColor.b, 0.5f);
