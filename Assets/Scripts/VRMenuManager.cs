@@ -45,7 +45,7 @@ namespace UR3eVR
 
         [Header("Menu State")]
         public bool isMenuOpen = false;
-        public enum MenuPanel { Main, Camera, Log, Background }
+        public enum MenuPanel { Main, Camera, Log, Background, Settings, Speed }
         public MenuPanel currentPanel = MenuPanel.Main;
 
         [Header("Skybox & Environment Options")]
@@ -82,6 +82,8 @@ namespace UR3eVR
         private GameObject panelCamera;
         private GameObject panelLog;
         private GameObject panelBg;
+        private GameObject panelSettings;
+        private GameObject panelSpeed;
 
         // Main Panel UI
         private Text statusText;
@@ -401,6 +403,12 @@ namespace UR3eVR
                     RefreshBgPageButtons();
                 }
             }
+            if (panelSettings != null) panelSettings.SetActive(panel == MenuPanel.Settings);
+            if (panelSpeed != null)
+            {
+                panelSpeed.SetActive(panel == MenuPanel.Speed);
+                if (panel == MenuPanel.Speed) RefreshSpeedUI();
+            }
 
             if (panel == MenuPanel.Camera)
             {
@@ -445,6 +453,16 @@ namespace UR3eVR
         public void ActionOpenLog()
         {
             ShowPanel(MenuPanel.Log);
+        }
+
+        public void ActionOpenSettings()
+        {
+            ShowPanel(MenuPanel.Settings);
+        }
+
+        public void ActionOpenSpeed()
+        {
+            ShowPanel(MenuPanel.Speed);
         }
 
         public void ActionBackground()
@@ -939,7 +957,15 @@ namespace UR3eVR
             panelBg = CreatePanel(canvasRT, "Panel_Background");
             BuildBackgroundPanelContent(panelBg.transform);
 
-            // 5. Meta Horizon OS Bottom Pill Grab Handle Bar
+            // 5. Build Settings Panel (Item 4b)
+            panelSettings = CreatePanel(canvasRT, "Panel_Settings");
+            BuildSettingsPanelContent(panelSettings.transform);
+
+            // 6. Build Speed Control Panel (Item 4c)
+            panelSpeed = CreatePanel(canvasRT, "Panel_Speed");
+            BuildSpeedPanelContent(panelSpeed.transform);
+
+            // 7. Meta Horizon OS Bottom Pill Grab Handle Bar
             GameObject grabBar = new GameObject("GrabHandleBar");
             grabBar.transform.SetParent(canvasObj.transform, false);
             RectTransform grabRT = grabBar.AddComponent<RectTransform>();
@@ -983,6 +1009,31 @@ namespace UR3eVR
             var dragger = grabBar.AddComponent<VRWindowDragger>();
             dragger.windowTransform = canvasObj.transform;
             dragger.handleImage = grabImg;
+
+            // Bottom-Right Corner Resize Handle (Item 2)
+            GameObject resizeHandleObj = new GameObject("WindowResizeHandle");
+            resizeHandleObj.transform.SetParent(canvasObj.transform, false);
+            RectTransform resRT = resizeHandleObj.AddComponent<RectTransform>();
+            resRT.anchorMin = new Vector2(0.92f, -0.09f);
+            resRT.anchorMax = new Vector2(0.98f, -0.02f);
+            resRT.offsetMin = Vector2.zero;
+            resRT.offsetMax = Vector2.zero;
+
+            Image resImg = resizeHandleObj.AddComponent<Image>();
+            if (roundedRectSprite != null)
+            {
+                resImg.sprite = roundedRectSprite;
+                resImg.type = Image.Type.Sliced;
+            }
+            resImg.material = null;
+            resImg.color = new Color(0.15f, 0.75f, 0.95f, 0.50f);
+
+            var resizer = resizeHandleObj.AddComponent<VRWindowResizer>();
+            resizer.targetCanvasRT = canvasRT;
+            resizer.handleImage = resImg;
+
+            Text resText = CreateText(resizeHandleObj.transform, "⤡", 16, Color.white, TextAnchor.MiddleCenter);
+            resText.fontStyle = FontStyle.Bold;
         }
 
         private GameObject CreatePanel(Transform parent, string name)
@@ -1023,35 +1074,39 @@ namespace UR3eVR
         {
             CreateHeader(p, "UR3e Quick Menu", () => ActionCloseMenu());
 
-            // 4 Main Buttons Container
+            // 5 Main Buttons Container (Item 4)
             GameObject btnGrid = new GameObject("ButtonGrid");
             btnGrid.transform.SetParent(p, false);
             RectTransform gridRT = btnGrid.AddComponent<RectTransform>();
-            gridRT.anchorMin = new Vector2(0.08f, 0.22f);
-            gridRT.anchorMax = new Vector2(0.92f, 0.82f);
+            gridRT.anchorMin = new Vector2(0.08f, 0.16f);
+            gridRT.anchorMax = new Vector2(0.92f, 0.84f);
             gridRT.offsetMin = Vector2.zero;
             gridRT.offsetMax = Vector2.zero;
 
             var vlg = btnGrid.AddComponent<VerticalLayoutGroup>();
-            vlg.spacing = 14;
+            vlg.spacing = 10;
             vlg.childForceExpandWidth = true;
             vlg.childForceExpandHeight = true;
 
             // 1. Set Origin
-            CreateSimpleButton(btnGrid.transform, "Set Origin (Calibrate to Hand Pose)", 52,
+            CreateSimpleButton(btnGrid.transform, "Set Origin (Calibrate to Hand Pose)", 46,
                 new Color(0.0f, 0.38f, 0.55f, 0.95f), Color.white, ActionSetOrigin);
 
-            // 2. Open New Cam
-            CreateSimpleButton(btnGrid.transform, "Open New Cam (Webcam Selector)", 52,
+            // 2. Add Cam (Item 4d: renamed from Open New Cam)
+            CreateSimpleButton(btnGrid.transform, "Add Cam (Webcam Selector)", 46,
                 new Color(0.12f, 0.22f, 0.40f, 0.95f), Color.white, ActionOpenNewCam);
 
             // 3. Open Log
-            CreateSimpleButton(btnGrid.transform, "Open Log (UR3e & Python Monitor)", 52,
+            CreateSimpleButton(btnGrid.transform, "Open Log (UR3e & Python Monitor)", 46,
                 new Color(0.24f, 0.18f, 0.38f, 0.95f), Color.white, ActionOpenLog);
 
-            // 4. Background
-            CreateSimpleButton(btnGrid.transform, "Background (Scene & Skybox)", 52,
-                new Color(0.14f, 0.24f, 0.26f, 0.95f), Color.white, ActionBackground);
+            // 4. Settings (Item 4b: Controls & Appearance)
+            CreateSimpleButton(btnGrid.transform, "Settings (Controls & Appearance)", 46,
+                new Color(0.14f, 0.26f, 0.32f, 0.95f), Color.white, ActionOpenSettings);
+
+            // 5. Speed (Item 4c: Velocity Control & Snap Presets)
+            CreateSimpleButton(btnGrid.transform, "Speed (Robot Motion Velocity)", 46,
+                new Color(0.10f, 0.34f, 0.28f, 0.95f), Color.white, ActionOpenSpeed);
 
             // Status Bar at Bottom
             GameObject statObj = new GameObject("StatusBar");
@@ -1579,14 +1634,28 @@ namespace UR3eVR
             header.transform.SetParent(parent, false);
 
             RectTransform hRT = header.AddComponent<RectTransform>();
-            hRT.anchorMin = new Vector2(0f, 0.86f);
-            hRT.anchorMax = new Vector2(1f, 1f);
+            hRT.anchorMin = new Vector2(0.02f, 0.86f);
+            hRT.anchorMax = new Vector2(0.98f, 0.98f);
             hRT.offsetMin = Vector2.zero;
             hRT.offsetMax = Vector2.zero;
 
             Image hImg = header.AddComponent<Image>();
-            hImg.material = null; // null = UI/Default shader = renders in BOTH eyes under SPI
-            hImg.color = new Color(0.03f, 0.05f, 0.08f, 0.98f);
+            if (roundedRectSprite != null)
+            {
+                hImg.sprite = roundedRectSprite;
+                hImg.type = Image.Type.Sliced;
+                hImg.material = visionElementMaterial;
+                hImg.color = new Color(0.12f, 0.16f, 0.24f, 0.94f);
+            }
+            else
+            {
+                hImg.material = null;
+                hImg.color = new Color(0.04f, 0.07f, 0.11f, 0.96f);
+            }
+
+            Outline hOl = header.AddComponent<Outline>();
+            hOl.effectColor = new Color(0.0f, 0.75f, 1.0f, 0.25f);
+            hOl.effectDistance = new Vector2(1f, -1f);
 
             if (onBack != null)
             {
@@ -1594,26 +1663,31 @@ namespace UR3eVR
                 backObj.transform.SetParent(header.transform, false);
                 RectTransform bRT = backObj.AddComponent<RectTransform>();
                 bRT.anchorMin = new Vector2(0.02f, 0.15f);
-                bRT.anchorMax = new Vector2(0.14f, 0.85f);
+                bRT.anchorMax = new Vector2(0.16f, 0.85f);
                 bRT.offsetMin = Vector2.zero;
                 bRT.offsetMax = Vector2.zero;
 
                 Image bImg = backObj.AddComponent<Image>();
+                if (roundedRectSprite != null)
+                {
+                    bImg.sprite = roundedRectSprite;
+                    bImg.type = Image.Type.Sliced;
+                }
                 bImg.material = null;
-                bImg.color = new Color(0.2f, 0.25f, 0.35f, 0.9f);
+                bImg.color = new Color(0.22f, 0.28f, 0.38f, 0.95f);
 
                 Button bBtn = backObj.AddComponent<Button>();
                 bBtn.onClick.AddListener(() => onBack());
                 allMenuButtons.Add(bBtn);
 
-                CreateText(backObj.transform, "< Back", 14, Color.white, TextAnchor.MiddleCenter);
+                CreateText(backObj.transform, "◀ Back", 14, Color.white, TextAnchor.MiddleCenter);
             }
 
             GameObject titleObj = new GameObject("TitleText");
             titleObj.transform.SetParent(header.transform, false);
             RectTransform tRT = titleObj.AddComponent<RectTransform>();
-            tRT.anchorMin = new Vector2(0.16f, 0f);
-            tRT.anchorMax = new Vector2(0.84f, 1f);
+            tRT.anchorMin = new Vector2(0.18f, 0f);
+            tRT.anchorMax = new Vector2(0.82f, 1f);
             tRT.offsetMin = Vector2.zero;
             tRT.offsetMax = Vector2.zero;
 
@@ -1623,28 +1697,331 @@ namespace UR3eVR
             titleText.fontSize = 20;
             titleText.fontStyle = FontStyle.Bold;
             titleText.alignment = TextAnchor.MiddleCenter;
-            titleText.color = Color.white;
+            titleText.color = new Color(0.92f, 0.96f, 1.0f, 1.0f);
             titleText.text = title;
 
-            // Close button [X] at top-right
+            // Close button [X] at top-right (Item 5)
             GameObject closeObj = new GameObject("Btn_Close");
             closeObj.transform.SetParent(header.transform, false);
             RectTransform cRT = closeObj.AddComponent<RectTransform>();
-            cRT.anchorMin = new Vector2(0.88f, 0.15f);
+            cRT.anchorMin = new Vector2(0.89f, 0.15f);
             cRT.anchorMax = new Vector2(0.98f, 0.85f);
             cRT.offsetMin = Vector2.zero;
             cRT.offsetMax = Vector2.zero;
 
             Image cImg = closeObj.AddComponent<Image>();
+            if (roundedRectSprite != null)
+            {
+                cImg.sprite = roundedRectSprite;
+                cImg.type = Image.Type.Sliced;
+            }
             cImg.material = null;
-            cImg.color = new Color(0.75f, 0.15f, 0.15f, 0.95f);
+            cImg.color = new Color(0.80f, 0.18f, 0.22f, 0.95f);
 
             Button cBtn = closeObj.AddComponent<Button>();
             cBtn.onClick.AddListener(() => onClose());
             allMenuButtons.Add(cBtn);
 
-            Text xText = CreateText(closeObj.transform, "X", 20, Color.white, TextAnchor.MiddleCenter);
-            xText.fontStyle = FontStyle.Bold;
+            if (crossIconSprite != null)
+            {
+                GameObject iconObj = new GameObject("CrossIcon");
+                iconObj.transform.SetParent(closeObj.transform, false);
+                RectTransform iRT = iconObj.AddComponent<RectTransform>();
+                iRT.anchorMin = new Vector2(0.2f, 0.2f);
+                iRT.anchorMax = new Vector2(0.8f, 0.8f);
+                iRT.offsetMin = Vector2.zero;
+                iRT.offsetMax = Vector2.zero;
+                Image iImg = iconObj.AddComponent<Image>();
+                iImg.sprite = crossIconSprite;
+                iImg.color = Color.white;
+            }
+            else
+            {
+                Text xText = CreateText(closeObj.transform, "✕", 18, Color.white, TextAnchor.MiddleCenter);
+                xText.fontStyle = FontStyle.Bold;
+            }
+        }
+
+        // =========================================================================
+        // Settings Panel (Item 4b)
+        // =========================================================================
+
+        private bool isDarkMode = true;
+
+        private void BuildSettingsPanelContent(Transform p)
+        {
+            CreateHeader(p, "System Settings", () => ActionCloseMenu(), () => ActionBackToMain());
+
+            // 2-Column Split: Left = Controls & Keybinds, Right = Appearance & Environment
+            GameObject splitObj = new GameObject("SettingsSplit");
+            splitObj.transform.SetParent(p, false);
+            RectTransform sRT = splitObj.AddComponent<RectTransform>();
+            sRT.anchorMin = new Vector2(0.06f, 0.22f);
+            sRT.anchorMax = new Vector2(0.94f, 0.83f);
+            sRT.offsetMin = Vector2.zero;
+            sRT.offsetMax = Vector2.zero;
+
+            var hlg = splitObj.AddComponent<HorizontalLayoutGroup>();
+            hlg.spacing = 16;
+            hlg.childForceExpandWidth = true;
+            hlg.childForceExpandHeight = true;
+
+            // Column 1: Controls Card
+            GameObject colCtrl = new GameObject("Card_Controls");
+            colCtrl.transform.SetParent(splitObj.transform, false);
+            Image ccImg = colCtrl.AddComponent<Image>();
+            if (roundedRectSprite != null) { ccImg.sprite = roundedRectSprite; ccImg.type = Image.Type.Sliced; }
+            ccImg.material = null;
+            ccImg.color = new Color(0.06f, 0.10f, 0.16f, 0.95f);
+            Outline ccOl = colCtrl.AddComponent<Outline>();
+            ccOl.effectColor = new Color(0.0f, 0.80f, 1.0f, 0.35f);
+
+            var vlgCtrl = colCtrl.AddComponent<VerticalLayoutGroup>();
+            vlgCtrl.padding = new RectOffset(16, 16, 14, 14);
+            vlgCtrl.spacing = 8;
+            vlgCtrl.childForceExpandWidth = true;
+            vlgCtrl.childForceExpandHeight = false;
+
+            CreateText(colCtrl.transform, "🎮 <b>Touch Controller Keybinds</b>", 17, new Color(0.0f, 0.9f, 1.0f), TextAnchor.MiddleLeft);
+            CreateText(colCtrl.transform, "• <b>[X Button]</b> : Set Origin / Calibrate Home", 14, Color.white, TextAnchor.MiddleLeft);
+            CreateText(colCtrl.transform, "• <b>[Y Button]</b> : Pause / Resume Teleoperation", 14, Color.white, TextAnchor.MiddleLeft);
+            CreateText(colCtrl.transform, "• <b>[Left Stick Click]</b> : Shake Test Tube", 14, Color.white, TextAnchor.MiddleLeft);
+            CreateText(colCtrl.transform, "• <b>[Left Stick Up/Down]</b> : Window Push/Pull", 14, Color.white, TextAnchor.MiddleLeft);
+            CreateText(colCtrl.transform, "• <b>[Right Middle Grip]</b> : Toggle Gripper Lock", 14, Color.white, TextAnchor.MiddleLeft);
+            CreateText(colCtrl.transform, "• <b>[Right Index Trigger]</b> : Gripper Pinch (0-255)", 14, Color.white, TextAnchor.MiddleLeft);
+
+            // Column 2: Appearance Card
+            GameObject colApp = new GameObject("Card_Appearance");
+            colApp.transform.SetParent(splitObj.transform, false);
+            Image caImg = colApp.AddComponent<Image>();
+            if (roundedRectSprite != null) { caImg.sprite = roundedRectSprite; caImg.type = Image.Type.Sliced; }
+            caImg.material = null;
+            caImg.color = new Color(0.06f, 0.10f, 0.16f, 0.95f);
+            Outline caOl = colApp.AddComponent<Outline>();
+            caOl.effectColor = new Color(0.7f, 0.3f, 1.0f, 0.35f);
+
+            var vlgApp = colApp.AddComponent<VerticalLayoutGroup>();
+            vlgApp.padding = new RectOffset(16, 16, 14, 14);
+            vlgApp.spacing = 14;
+            vlgApp.childForceExpandWidth = true;
+            vlgApp.childForceExpandHeight = false;
+
+            CreateText(colApp.transform, "🎨 <b>Appearance & Environment</b>", 17, new Color(0.85f, 0.55f, 1.0f), TextAnchor.MiddleLeft);
+
+            CreateSimpleButton(colApp.transform, "🌌 Skybox Background Selector >", 48,
+                new Color(0.18f, 0.16f, 0.32f, 0.95f), Color.white, ActionBackground);
+
+            CreateSimpleButton(colApp.transform, "🌓 Toggle Dark / High-Contrast Mode", 48,
+                new Color(0.14f, 0.22f, 0.28f, 0.95f), Color.white, ToggleDarkLightMode);
+
+            // Bottom Navigation Bar
+            GameObject botBar = new GameObject("SettingsBottomBar");
+            botBar.transform.SetParent(p, false);
+            RectTransform bbRT = botBar.AddComponent<RectTransform>();
+            bbRT.anchorMin = new Vector2(0.06f, 0.05f);
+            bbRT.anchorMax = new Vector2(0.94f, 0.16f);
+            bbRT.offsetMin = Vector2.zero;
+            bbRT.offsetMax = Vector2.zero;
+
+            CreateSimpleButton(botBar.transform, "◀ Back to Main Menu", 44, new Color(0.18f, 0.22f, 0.30f, 0.95f), Color.white, ActionBackToMain);
+        }
+
+        public void ToggleDarkLightMode()
+        {
+            isDarkMode = !isDarkMode;
+            ShowToast(isDarkMode ? "Dark Theme Active" : "High-Contrast Light Theme Active");
+            HapticPulse(0.3f, 0.08f);
+        }
+
+        // =========================================================================
+        // Speed Panel (Item 4c)
+        // =========================================================================
+
+        public int currentSpeedPercent = 100;
+        private Text speedDisplayLabel;
+        private Slider speedSliderComponent;
+        private Image speedSliderFillImg;
+
+        private void BuildSpeedPanelContent(Transform p)
+        {
+            CreateHeader(p, "Robot Motion Speed", () => ActionCloseMenu(), () => ActionBackToMain());
+
+            // Card 1: Current Speed Display Card
+            GameObject cardObj = new GameObject("SpeedCard");
+            cardObj.transform.SetParent(p, false);
+            RectTransform cRT = cardObj.AddComponent<RectTransform>();
+            cRT.anchorMin = new Vector2(0.08f, 0.65f);
+            cRT.anchorMax = new Vector2(0.92f, 0.83f);
+            cRT.offsetMin = Vector2.zero;
+            cRT.offsetMax = Vector2.zero;
+
+            Image cardImg = cardObj.AddComponent<Image>();
+            if (roundedRectSprite != null)
+            {
+                cardImg.sprite = roundedRectSprite;
+                cardImg.type = Image.Type.Sliced;
+            }
+            cardImg.material = null;
+            cardImg.color = new Color(0.06f, 0.10f, 0.16f, 0.95f);
+
+            Outline cardOl = cardObj.AddComponent<Outline>();
+            cardOl.effectColor = new Color(0.0f, 0.85f, 1.0f, 0.40f);
+            cardOl.effectDistance = new Vector2(1.5f, -1.5f);
+
+            speedDisplayLabel = CreateText(cardObj.transform, "Robot Speed: 100% [MAX]", 24, Color.white, TextAnchor.MiddleCenter);
+            speedDisplayLabel.fontStyle = FontStyle.Bold;
+
+            // Card 2: Interactive Slider Container
+            GameObject sliderCard = new GameObject("SliderContainer");
+            sliderCard.transform.SetParent(p, false);
+            RectTransform sRT = sliderCard.AddComponent<RectTransform>();
+            sRT.anchorMin = new Vector2(0.08f, 0.44f);
+            sRT.anchorMax = new Vector2(0.92f, 0.60f);
+            sRT.offsetMin = Vector2.zero;
+            sRT.offsetMax = Vector2.zero;
+
+            // Slider Background Track
+            GameObject sBg = new GameObject("SliderBackground");
+            sBg.transform.SetParent(sliderCard.transform, false);
+            RectTransform sbgRT = sBg.AddComponent<RectTransform>();
+            sbgRT.anchorMin = new Vector2(0f, 0.35f);
+            sbgRT.anchorMax = new Vector2(1f, 0.65f);
+            sbgRT.offsetMin = Vector2.zero;
+            sbgRT.offsetMax = Vector2.zero;
+            Image sbgImg = sBg.AddComponent<Image>();
+            if (roundedRectSprite != null) { sbgImg.sprite = roundedRectSprite; sbgImg.type = Image.Type.Sliced; }
+            sbgImg.material = null;
+            sbgImg.color = new Color(0.12f, 0.16f, 0.22f, 0.95f);
+
+            // Slider Fill Area
+            GameObject fillArea = new GameObject("FillArea");
+            fillArea.transform.SetParent(sliderCard.transform, false);
+            RectTransform faRT = fillArea.AddComponent<RectTransform>();
+            faRT.anchorMin = new Vector2(0f, 0.35f);
+            faRT.anchorMax = new Vector2(1f, 0.65f);
+            faRT.offsetMin = new Vector2(6f, 0f);
+            faRT.offsetMax = new Vector2(-6f, 0f);
+
+            GameObject fillObj = new GameObject("Fill");
+            fillObj.transform.SetParent(fillArea.transform, false);
+            RectTransform fRT = fillObj.AddComponent<RectTransform>();
+            fRT.sizeDelta = Vector2.zero;
+            speedSliderFillImg = fillObj.AddComponent<Image>();
+            if (roundedRectSprite != null) { speedSliderFillImg.sprite = roundedRectSprite; speedSliderFillImg.type = Image.Type.Sliced; }
+            speedSliderFillImg.material = null;
+            speedSliderFillImg.color = new Color(1.0f, 0.25f, 0.25f, 0.95f);
+
+            // Slider Handle Area
+            GameObject handleArea = new GameObject("HandleSlideArea");
+            handleArea.transform.SetParent(sliderCard.transform, false);
+            RectTransform haRT = handleArea.AddComponent<RectTransform>();
+            haRT.anchorMin = Vector2.zero;
+            haRT.anchorMax = Vector2.one;
+            haRT.offsetMin = new Vector2(15f, 0f);
+            haRT.offsetMax = new Vector2(-15f, 0f);
+
+            GameObject handleObj = new GameObject("Handle");
+            handleObj.transform.SetParent(handleArea.transform, false);
+            RectTransform hRT = handleObj.AddComponent<RectTransform>();
+            hRT.sizeDelta = new Vector2(34f, 44f);
+            Image hImg = handleObj.AddComponent<Image>();
+            if (roundedRectSprite != null) { hImg.sprite = roundedRectSprite; hImg.type = Image.Type.Sliced; }
+            hImg.material = null;
+            hImg.color = Color.white;
+
+            speedSliderComponent = sliderCard.AddComponent<Slider>();
+            speedSliderComponent.fillRect = fRT;
+            speedSliderComponent.handleRect = hRT;
+            speedSliderComponent.targetGraphic = hImg;
+            speedSliderComponent.direction = Slider.Direction.LeftToRight;
+            speedSliderComponent.minValue = 0f;
+            speedSliderComponent.maxValue = 100f;
+            speedSliderComponent.wholeNumbers = true;
+            speedSliderComponent.value = currentSpeedPercent;
+            speedSliderComponent.onValueChanged.AddListener((v) => SetSpeedPercent(Mathf.RoundToInt(v)));
+
+            // Card 3: Quick Snap Presets Row (0%, 25%, 50%, 75%, 100%)
+            GameObject presetRow = new GameObject("PresetRow");
+            presetRow.transform.SetParent(p, false);
+            RectTransform prRT = presetRow.AddComponent<RectTransform>();
+            prRT.anchorMin = new Vector2(0.08f, 0.25f);
+            prRT.anchorMax = new Vector2(0.92f, 0.38f);
+            prRT.offsetMin = Vector2.zero;
+            prRT.offsetMax = Vector2.zero;
+
+            var hlg = presetRow.AddComponent<HorizontalLayoutGroup>();
+            hlg.spacing = 10;
+            hlg.childForceExpandWidth = true;
+            hlg.childForceExpandHeight = true;
+
+            CreateSimpleButton(presetRow.transform, "0% Stop", 42, new Color(0.20f, 0.20f, 0.25f, 0.95f), Color.white, () => SetSpeedPercent(0));
+            CreateSimpleButton(presetRow.transform, "25% Slow", 42, new Color(0.05f, 0.35f, 0.20f, 0.95f), Color.white, () => SetSpeedPercent(25));
+            CreateSimpleButton(presetRow.transform, "50% Med", 42, new Color(0.10f, 0.40f, 0.35f, 0.95f), Color.white, () => SetSpeedPercent(50));
+            CreateSimpleButton(presetRow.transform, "75% Fast ⚠️", 42, new Color(0.45f, 0.35f, 0.05f, 0.95f), Color.white, () => SetSpeedPercent(75));
+            CreateSimpleButton(presetRow.transform, "100% Max 🔴", 42, new Color(0.55f, 0.15f, 0.18f, 0.95f), Color.white, () => SetSpeedPercent(100));
+
+            // Bottom Back Button
+            GameObject botBar = new GameObject("SpeedBottomBar");
+            botBar.transform.SetParent(p, false);
+            RectTransform bbRT = botBar.AddComponent<RectTransform>();
+            bbRT.anchorMin = new Vector2(0.08f, 0.06f);
+            bbRT.anchorMax = new Vector2(0.92f, 0.18f);
+            bbRT.offsetMin = Vector2.zero;
+            bbRT.offsetMax = Vector2.zero;
+
+            CreateSimpleButton(botBar.transform, "◀ Back to Main Menu", 44, new Color(0.18f, 0.22f, 0.30f, 0.95f), Color.white, ActionBackToMain);
+
+            UpdateSpeedVisuals(currentSpeedPercent);
+        }
+
+        public void SetSpeedPercent(int pct)
+        {
+            currentSpeedPercent = Mathf.Clamp(pct, 0, 100);
+            if (speedSliderComponent != null && Mathf.RoundToInt(speedSliderComponent.value) != currentSpeedPercent)
+            {
+                speedSliderComponent.value = currentSpeedPercent;
+            }
+
+            if (gripperBridge != null)
+            {
+                gripperBridge.SendSpeed(currentSpeedPercent);
+            }
+
+            UpdateSpeedVisuals(currentSpeedPercent);
+            HapticPulse(0.35f, 0.06f);
+        }
+
+        private void UpdateSpeedVisuals(int pct)
+        {
+            Color trackCol;
+            string statusSuffix;
+            if (pct < 50)
+            {
+                trackCol = new Color(0.0f, 1.0f, 0.55f, 0.95f); // Neon Green (Safe)
+                statusSuffix = "<color=#00FF88>[SAFE]</color>";
+            }
+            else if (pct < 75)
+            {
+                trackCol = new Color(1.0f, 0.80f, 0.0f, 0.95f);  // Amber Yellow (Caution ⚠️)
+                statusSuffix = "<color=#FFC800>[CAUTION ⚠️]</color>";
+            }
+            else
+            {
+                trackCol = new Color(1.0f, 0.22f, 0.25f, 0.95f); // Vivid Red (Danger 🔴)
+                statusSuffix = "<color=#FF3344>[MAX VELOCITY 🔴]</color>";
+            }
+
+            if (speedSliderFillImg != null) speedSliderFillImg.color = trackCol;
+            if (speedDisplayLabel != null)
+            {
+                speedDisplayLabel.text = $"Robot Speed: <b><color=#{ColorUtility.ToHtmlStringRGB(trackCol)}>{pct}%</color></b>  {statusSuffix}";
+            }
+        }
+
+        private void RefreshSpeedUI()
+        {
+            if (speedSliderComponent != null) speedSliderComponent.value = currentSpeedPercent;
+            UpdateSpeedVisuals(currentSpeedPercent);
         }
 
         private GameObject CreateSimpleButton(Transform parent, string label, float height, Color bgCol, Color textCol, Action onClick)

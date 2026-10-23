@@ -43,12 +43,16 @@ namespace UR3eVR
         // Current Hover & Drag States
         private Selectable currentHoverSelectable = null;
         private VRWindowDragger currentHoverDragger = null;
+        private VRWindowResizer currentHoverResizer = null;
         private VRWindowDragger activeDraggingWindow = null;
+        private VRWindowResizer activeResizingWindow = null;
         private float activeDragDistance = 1.0f;
         private Vector3 activeDragLocalOffset = Vector3.zero;
 
         private bool wasTriggerDown = false;
         private PointerEventData pointerEventData;
+        private Vector3 snappedEndPoint = Vector3.zero;
+        private float currentReticleScale = 1.0f;
 
         private void Awake()
         {
@@ -232,6 +236,21 @@ namespace UR3eVR
 
                 if (isStillHeld && activeDraggingWindow.windowTransform != null)
                 {
+                    // Item 10: Joystick Push/Pull for UI Window Distance
+                    Vector2 thumbstick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, controller);
+                    try
+                    {
+                        if (Mathf.Abs(Input.GetAxis("Vertical")) > 0.1f) thumbstick.y = Input.GetAxis("Vertical");
+                    }
+                    catch { }
+
+                    if (Mathf.Abs(thumbstick.y) > 0.25f)
+                    {
+                        float pushPullSpeed = 1.6f;
+                        activeDragDistance += thumbstick.y * pushPullSpeed * Time.deltaTime;
+                        activeDragDistance = Mathf.Clamp(activeDragDistance, 0.35f, 4.5f);
+                    }
+
                     Vector3 targetWindowPos = rayOrigin + rayDir * activeDragDistance - activeDragLocalOffset;
                     activeDraggingWindow.windowTransform.position = Vector3.Lerp(activeDraggingWindow.windowTransform.position, targetWindowPos, Time.deltaTime * 25f);
 
@@ -260,6 +279,27 @@ namespace UR3eVR
                 }
             }
 
+            // Handle active window resizing in 3D space via Laser Pointer (Item 2)
+            if (activeResizingWindow != null)
+            {
+                bool isStillHeld = OVRInput.Get(OVRInput.Button.PrimaryIndexTrigger, controller)
+                                || OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, controller) > 0.35f
+                                || OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, controller)
+                                || OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, controller) > 0.35f;
+                try { isStillHeld |= Input.GetMouseButton(0); } catch { }
+
+                if (isStillHeld)
+                {
+                    Vector3 currentPointerHit = rayOrigin + rayDir * activeDragDistance;
+                    activeResizingWindow.UpdateResize(currentPointerHit);
+                }
+                else
+                {
+                    activeResizingWindow.EndResize();
+                    activeResizingWindow = null;
+                }
+            }
+
             Ray ray = new Ray(rayOrigin, rayDir);
             Vector3 endPoint = rayOrigin + rayDir * maxRayLength;
             Vector3 hitNormal = -rayDir;
@@ -267,19 +307,27 @@ namespace UR3eVR
 
             Selectable hitSelectable = null;
             VRWindowDragger hitDragger = null;
+            VRWindowResizer hitResizer = null;
 
-            // Raycast against World Space UI Canvases and Draggers
-            hasHit = RaycastUIAndDraggers(ray, ref endPoint, ref hitNormal, ref hitSelectable, ref hitDragger);
+            // Raycast against World Space UI Canvases, Resizers, and Draggers
+            hasHit = RaycastUIAndDraggers(ray, ref endPoint, ref hitNormal, ref hitSelectable, ref hitDragger, ref hitResizer);
 
             // Handle Hover State Transitions
-            UpdateHoverStates(hitSelectable, hitDragger);
+            UpdateHoverStates(hitSelectable, hitDragger, hitResizer);
 
-            // Trigger Pressed: Click UI Button or Begin Window Drag
+            // Trigger Pressed: Click UI Button, Resize Window, or Begin Window Drag
             if (isTriggerJustPressed)
             {
                 if (hitSelectable != null)
                 {
                     ExecuteButtonClick(hitSelectable);
+                }
+                else if (hitResizer != null)
+                {
+                    activeResizingWindow = hitResizer;
+                    activeDragDistance = Vector3.Distance(rayOrigin, endPoint);
+                    hitResizer.StartResize(endPoint);
+                    HapticPulse(0.5f, 0.08f);
                 }
                 else if (hitDragger != null)
                 {
@@ -311,11 +359,11 @@ namespace UR3eVR
             // Visual Colors
             Color activeColor = normalLaserColor;
             if (isTriggerDown) activeColor = clickLaserColor;
-            else if (currentHoverSelectable != null || currentHoverDragger != null || activeDraggingWindow != null) activeColor = hoverLaserColor;
+            else if (currentHoverSelectable != null || currentHoverDragger != null || currentHoverResizer != null || activeDraggingWindow != null || activeResizingWindow != null) activeColor = hoverLaserColor;
 
             SetVisualColors(activeColor);
 
-            // Update Reticle Disc
+            // Update Reticle Disc & Scale Pulse (Item 1)
             if (reticleObj != null)
             {
                 reticleObj.SetActive(hasHit);
@@ -323,6 +371,15 @@ namespace UR3eVR
                 {
                     reticleObj.transform.position = endPoint + hitNormal * 0.003f;
                     reticleObj.transform.rotation = Quaternion.LookRotation(hitNormal, Vector3.up);
+
+                    float targetScale = (hitSelectable != null) ? 1.35f : 1.0f;
+                    currentReticleScale = Mathf.Lerp(currentReticleScale, targetScale, Time.deltaTime * 18f);
+                    reticleObj.transform.localScale = Vector3.one * currentReticleScale;
+                }
+                else
+                {
+                    currentReticleScale = 1.0f;
+                    reticleObj.transform.localScale = Vector3.one;
                 }
             }
 
@@ -380,16 +437,16 @@ namespace UR3eVR
             return false;
         }
 
-        private bool RaycastUIAndDraggers(Ray ray, ref Vector3 endPoint, ref Vector3 hitNormal, ref Selectable hitSelectable, ref VRWindowDragger hitDragger)
+        private bool RaycastUIAndDraggers(Ray ray, ref Vector3 endPoint, ref Vector3 hitNormal, ref Selectable hitSelectable, ref VRWindowDragger hitDragger, ref VRWindowResizer hitResizer)
         {
             float closestInteractableDist = maxRayLength;
             Selectable bestSel = null;
             VRWindowDragger bestDragger = null;
+            VRWindowResizer bestResizer = null;
             Vector3 bestInteractableHit = Vector3.zero;
             Vector3 bestInteractableNormal = -ray.direction;
 
-            // 1. Raycast all active Selectables (Buttons, Toggles, etc.) FIRST with priority and 0.0 margin
-            // Buttons ALWAYS take precedence over window dragging!
+            // 1. Raycast all active Selectables (Buttons, Toggles, etc.) FIRST with priority
             var selectables = FindObjectsByType<Selectable>(FindObjectsSortMode.None);
             foreach (var sel in selectables)
             {
@@ -397,22 +454,49 @@ namespace UR3eVR
                 RectTransform srt = sel.GetComponent<RectTransform>();
                 if (srt == null) continue;
 
-                // Pixel-perfect quad hit testing matching exact visual button geometry
-                if (RaycastRectTransformQuad(ray, srt, 0.0f, out float dist, out Vector3 pt, out Vector3 norm))
+                // Item 1: Magnetic Snap Margin (15% boundary margin around selectable buttons)
+                if (RaycastRectTransformQuad(ray, srt, 0.15f, out float dist, out Vector3 pt, out Vector3 norm))
                 {
                     if (dist < closestInteractableDist)
                     {
                         closestInteractableDist = dist;
                         bestSel = sel;
                         bestDragger = null;
+                        bestResizer = null;
                         bestInteractableHit = pt;
                         bestInteractableNormal = norm;
                     }
                 }
             }
 
-            // 2. Raycast VRWindowDraggers ONLY if no button was hit
+            // 2. Raycast VRWindowResizers if no button was hit (Corner resize handles)
             if (bestSel == null)
+            {
+                var resizers = FindObjectsByType<VRWindowResizer>(FindObjectsSortMode.None);
+                foreach (var r in resizers)
+                {
+                    if (r == null || !r.gameObject.activeInHierarchy) continue;
+                    RectTransform rrt = r.GetComponent<RectTransform>();
+                    if (rrt != null)
+                    {
+                        if (RaycastRectTransformQuad(ray, rrt, 0.15f, out float dist, out Vector3 pt, out Vector3 norm))
+                        {
+                            if (dist < closestInteractableDist)
+                            {
+                                closestInteractableDist = dist;
+                                bestResizer = r;
+                                bestDragger = null;
+                                bestSel = null;
+                                bestInteractableHit = pt;
+                                bestInteractableNormal = norm;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Raycast VRWindowDraggers ONLY if no button or resizer was hit
+            if (bestSel == null && bestResizer == null)
             {
                 var draggers = FindObjectsByType<VRWindowDragger>(FindObjectsSortMode.None);
                 foreach (var d in draggers)
@@ -437,13 +521,31 @@ namespace UR3eVR
                 }
             }
 
-            // If we hit an interactable (button or dragger), prioritize it!
-            if (bestSel != null || bestDragger != null)
+            // If we hit an interactable (button, resizer, or dragger), prioritize it!
+            if (bestSel != null || bestResizer != null || bestDragger != null)
             {
                 endPoint = bestInteractableHit;
                 hitNormal = bestInteractableNormal;
                 hitSelectable = bestSel;
                 hitDragger = bestDragger;
+                hitResizer = bestResizer;
+
+                // Item 1: Magnetic Snap to Button Center
+                if (bestSel != null)
+                {
+                    RectTransform srt = bestSel.GetComponent<RectTransform>();
+                    if (srt != null)
+                    {
+                        Vector3 buttonCenter = srt.position;
+                        if (snappedEndPoint == Vector3.zero) snappedEndPoint = bestInteractableHit;
+                        snappedEndPoint = Vector3.Lerp(snappedEndPoint, buttonCenter, Time.deltaTime * 20f);
+                        endPoint = snappedEndPoint;
+                    }
+                }
+                else
+                {
+                    snappedEndPoint = endPoint;
+                }
 
                 Camera eventCam = headTransform != null ? headTransform.GetComponent<Camera>() : Camera.main;
                 if (eventCam != null && pointerEventData != null)
@@ -501,7 +603,7 @@ namespace UR3eVR
             return false;
         }
 
-        private void UpdateHoverStates(Selectable newSelectable, VRWindowDragger newDragger)
+        private void UpdateHoverStates(Selectable newSelectable, VRWindowDragger newDragger, VRWindowResizer newResizer)
         {
             // Transition Selectable Hover
             if (newSelectable != currentHoverSelectable)
@@ -517,6 +619,18 @@ namespace UR3eVR
                 {
                     ExecuteEvents.Execute(currentHoverSelectable.gameObject, pointerEventData, ExecuteEvents.pointerEnterHandler);
                     HapticPulse(0.18f, 0.04f);
+                }
+            }
+
+            // Transition Resizer Hover (Item 2)
+            if (newResizer != currentHoverResizer)
+            {
+                if (currentHoverResizer != null) currentHoverResizer.isHovered = false;
+                currentHoverResizer = newResizer;
+                if (currentHoverResizer != null)
+                {
+                    currentHoverResizer.isHovered = true;
+                    HapticPulse(0.20f, 0.04f);
                 }
             }
 
