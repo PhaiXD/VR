@@ -1402,7 +1402,8 @@ namespace UR3eVR
 
 
 
-                // Position cleanly offset to the right
+                // Position cleanly offset to the right — count only current secondary windows to avoid accumulation
+                // when windows are created/destroyed repeatedly
 
                 if (Instance.canvasObj != null)
 
@@ -1410,7 +1411,14 @@ namespace UR3eVR
 
                     Transform baseTr = Instance.canvasObj.transform;
 
-                    float offsetDist = 0.72f * Mathf.Max(1, ActiveWindows.Count - 1);
+                    // Count only existing secondary windows (excludes the primary Instance)
+                    int existingSecondary = 0;
+                    foreach (var w in ActiveWindows)
+                    {
+                        if (w != null && w.isSecondaryWindow) existingSecondary++;
+                    }
+
+                    float offsetDist = 0.72f * Mathf.Max(1, existingSecondary);
 
                     newObj.transform.position = baseTr.position + baseTr.right * offsetDist;
 

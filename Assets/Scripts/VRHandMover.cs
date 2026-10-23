@@ -744,6 +744,7 @@ namespace UR3eVR
 
         /// <summary>
         /// ซิงค์ Anchor ใหม่เมื่อ Unpause เพื่อไม่ให้แขนกลกระตุกหรือพุ่งตามมือ (Zero Jerk Resume)
+        /// อ่านตำแหน่งจริงของหุ่นยนต์จาก GripperBridge โดยตรง (ไม่ใช้ cached value ที่อาจ stale)
         /// </summary>
         public void SyncAnchorOnResume()
         {
@@ -757,7 +758,17 @@ namespace UR3eVR
             }
             anchorHandRot = Quaternion.Inverse(anchorHeadYaw) * activeTransform.rotation;
 
-            if (hasReceivedRobotPose)
+            // Read LIVE robot pose from GripperBridge (not stale cached value)
+            if (gripperBridge != null && gripperBridge.hasReceivedRobotPose)
+            {
+                actualRobotPos = gripperBridge.actualRobotPos;
+                actualRobotRot = gripperBridge.actualRobotRot;
+                anchorRobotPos = actualRobotPos;
+                anchorRobotRot = actualRobotRot;
+                currentTargetPos = actualRobotPos;
+                currentTargetRotAxisAngle = actualRobotRot;
+            }
+            else if (hasReceivedRobotPose)
             {
                 anchorRobotPos = actualRobotPos;
                 anchorRobotRot = actualRobotRot;

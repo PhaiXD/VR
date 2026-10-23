@@ -81,6 +81,7 @@ namespace UR3eVR
         [Tooltip("สถานะล็อกระดับการหนีบของ Gripper")]
         public bool isGripperLocked = false;
         public int lockedGripPos = 0;
+        private bool wasRightGripPressed = false; // Edge detection for grip button toggle
 
         [Header("Robot Pose Feedback (Read Only)")]
         public Vector3 actualRobotPos = Vector3.zero;
@@ -243,11 +244,15 @@ namespace UR3eVR
                     }
                 }
 
-                // Toggle Gripper Lock with 'A' Button (One) on Right Touch Controller
-                if (OVRInput.GetDown(OVRInput.Button.One, OVRInput.Controller.RTouch))
+                // Toggle Gripper Lock with Grip Button (Hand Trigger / middle finger squeeze) on Right Touch Controller
+                // Uses edge detection: trigger when grip crosses 0.7 threshold rising edge
+                float rightGripVal = OVRInput.Get(OVRInput.Axis1D.PrimaryHandTrigger, OVRInput.Controller.RTouch);
+                bool rightGripPressed = (rightGripVal >= 0.7f);
+                if (rightGripPressed && !wasRightGripPressed)
                 {
                     ToggleGripperLock();
                 }
+                wasRightGripPressed = rightGripPressed;
             }
             else if (pinchDetector != null && pinchDetector.isTracked)
             {
