@@ -533,8 +533,14 @@ namespace UR3eVR
             }
         }
 
+        private float lastButtonClickTime = 0f;
+
         private void ExecuteButtonClick(Selectable sel)
         {
+            // Click debounce (0.28s) to strictly ensure 1 trigger press = exactly 1 click action
+            if (Time.unscaledTime - lastButtonClickTime < 0.28f) return;
+            lastButtonClickTime = Time.unscaledTime;
+
             HapticPulse(0.6f, 0.10f);
 
             if (bhapticsFeedback != null)
@@ -542,18 +548,15 @@ namespace UR3eVR
                 bhapticsFeedback.TriggerClickPulse(70, 60);
             }
 
-            if (EventSystem.current != null)
-            {
-                ExecuteEvents.Execute(sel.gameObject, pointerEventData, ExecuteEvents.pointerDownHandler);
-                ExecuteEvents.Execute(sel.gameObject, pointerEventData, ExecuteEvents.pointerUpHandler);
-                ExecuteEvents.Execute(sel.gameObject, pointerEventData, ExecuteEvents.pointerClickHandler);
-                ExecuteEvents.Execute(sel.gameObject, pointerEventData, ExecuteEvents.submitHandler);
-            }
-
             var btn = sel as Button;
             if (btn != null && btn.onClick != null)
             {
+                // Directly invoke button click handler once
                 btn.onClick.Invoke();
+            }
+            else if (EventSystem.current != null)
+            {
+                ExecuteEvents.Execute(sel.gameObject, pointerEventData, ExecuteEvents.pointerClickHandler);
             }
 
             StartCoroutine(PunchScale(sel.transform));

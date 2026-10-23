@@ -1230,8 +1230,7 @@ namespace UR3eVR
                     skyboxMaterial = null 
                 });
 
-#if UNITY_EDITOR
-                // Day & Atmosphere
+// Day & Atmosphere
                 AddSkyboxOption("â˜€ï¸ Casual Day", "Clear Daylight", "Assets/SkySeries Freebie/CasualDay.mat");
                 AddSkyboxOption("ðŸŒ… Cloudy Morning", "Sunrise Pastels", "Assets/SkySeries Freebie/Cloudymorning.mat");
                 AddSkyboxOption("ðŸŒ¤ï¸ Clouded Sun Glow", "Golden Hour", "Assets/SkySeries Freebie/CloudedSunGlow.mat");
@@ -1253,23 +1252,30 @@ namespace UR3eVR
                 AddSkyboxOption("ðŸª Unearthly Red", "Alien World", "Assets/SkySeries Freebie/UnearthlyRed.mat");
                 AddSkyboxOption("ðŸŒŠ Under The Sea 4K", "Aquatic Abyss", "Assets/SkySeries Freebie/UnderTheSea4k.mat");
                 AddSkyboxOption("ðŸŒŒ 6-Sided Cosmic Cloud", "Cosmic 360", "Assets/SkySeries Freebie/6sidedCosmicCoolCloud.mat");
-#endif
+
             }
         }
 
         private void AddSkyboxOption(string name, string category, string assetPath)
         {
+            Material mat = null;
 #if UNITY_EDITOR
-            var mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(assetPath);
+            mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(assetPath);
+#endif
+            if (mat == null)
+            {
+                string resName = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+                mat = Resources.Load<Material>("Skyboxes/" + resName);
+            }
+
             if (mat != null)
             {
-                skyboxOptions.Add(new SkyboxOption { 
-                    displayName = name, 
-                    category = category, 
-                    skyboxMaterial = mat 
+                skyboxOptions.Add(new SkyboxOption {
+                    displayName = name,
+                    category = category,
+                    skyboxMaterial = mat
                 });
             }
-#endif
         }
 
         public void LoadSavedSkyboxPreference()

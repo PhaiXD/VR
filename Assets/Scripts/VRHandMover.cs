@@ -26,9 +26,9 @@ namespace UR3eVR
         [Header("One Euro Filter Settings")]
         public bool enableOneEuroFilter = true;
         [Range(0.1f, 5.0f)] public float posMinCutoff = 0.85f;
-        [Range(0.0f, 50.0f)] public float posBeta = 6.0f;
+        [Range(0.0f, 50.0f)] public float posBeta = 1.5f;
         [Range(0.1f, 5.0f)] public float rotMinCutoff = 0.80f;
-        [Range(0.0f, 20.0f)] public float rotBeta = 5.0f;
+        [Range(0.0f, 20.0f)] public float rotBeta = 1.2f;
         public float dCutoff = 1.5f;
 
         [Header("Starter Point (UR3e Home Visualizer)")]
@@ -485,7 +485,8 @@ namespace UR3eVR
                 // เวกเตอร์การเคลื่อนที่จากจุด Anchor World Space -> แปลงเข้าสู่แกนหน้าแว่น
                 // Z = พุ่งออกจากแว่น (Forward), X = ไปทางขวาของแว่น (Right), Y = ขึ้นบน (Up)
                 Vector3 worldDelta = filteredWorldPos - anchorHandWorldPos;
-                Vector3 handDelta = Quaternion.Inverse(currentHeadYaw) * worldDelta;
+                Quaternion referenceYaw = (useHeadsetOrientation && isAnchorSet) ? anchorHeadYaw : Quaternion.identity;
+                Vector3 handDelta = Quaternion.Inverse(referenceYaw) * worldDelta;
 
                 // Deadband ขั้นต่ำสำหรับตัด Hand Tremor ตอนมืออยู่นิ่ง
                 if (Mathf.Abs(handDelta.x) < 0.0008f) handDelta.x = 0f;
@@ -549,7 +550,7 @@ namespace UR3eVR
                 Vector3 targetRotVec = anchorRobotRot;
                 if (enableRotation)
                 {
-                    Quaternion currentRotRel = Quaternion.Inverse(currentHeadYaw) * filteredWorldRot;
+                    Quaternion currentRotRel = Quaternion.Inverse(referenceYaw) * filteredWorldRot;
                     Quaternion deltaRot = currentRotRel * Quaternion.Inverse(anchorHandRot);
                     deltaRot.ToAngleAxis(out float angleDeg, out Vector3 axis);
                     if (angleDeg > 180f) angleDeg -= 360f;
@@ -687,6 +688,10 @@ namespace UR3eVR
             if (isTeleoperationPaused)
             {
                 isTeleoperationPaused = false;
+            }
+            if (gripperBridge != null)
+            {
+                gripperBridge.SendPause(false);
             }
             TriggerLeftControllerHaptic(0.6f, 0.15f);
             Debug.Log("[VRHandMover] [Button X] Set Origin Point (Center Point & Safe Home) executed!");

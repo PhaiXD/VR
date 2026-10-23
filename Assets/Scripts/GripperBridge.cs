@@ -191,8 +191,19 @@ namespace UR3eVR
             }
 
             // 2. Read Gripper input: Touch Controller Index Trigger or Bare Hand Pinch
-            bool controllerActive = OVRInput.GetControllerPositionTracked(OVRInput.Controller.RTouch);
-            if (controllerActive)
+            // Determine whether user is holding Touch Controller or using Bare Hand Tracking
+            bool usingController = false;
+            if (VRHandMover.Instance != null && VRHandMover.Instance.isUsingController)
+            {
+                usingController = true;
+            }
+            else
+            {
+                var activeCtrl = OVRInput.GetActiveController();
+                usingController = (activeCtrl == OVRInput.Controller.RTouch || activeCtrl == OVRInput.Controller.Touch);
+            }
+
+            if (usingController)
             {
                 float triggerVal = OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, OVRInput.Controller.RTouch);
                 int currentPos = Mathf.RoundToInt(triggerVal * 255f);
