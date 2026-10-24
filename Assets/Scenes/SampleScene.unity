@@ -2587,7 +2587,6 @@ GameObject:
   - component: {fileID: 960532776}
   - component: {fileID: 960532785}
   - component: {fileID: 960532784}
-  - component: {fileID: 960532783}
   - component: {fileID: 960532786}
   - component: {fileID: 960532787}
   - component: {fileID: 960532788}
@@ -2773,25 +2772,7 @@ MonoBehaviour:
   installationRoutineCheckpoint:
     _installationRoutineId: 
     _installationVariants: []
---- !u!114 &960532783
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 960532774}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b65a3a85784d8b5448f7242995a368d0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UR3eVR.HandDebugHUD
-  pinchDetector: {fileID: 960532785}
-  gripperBridge: {fileID: 960532784}
-  bhapticsFeedback: {fileID: 0}
-  vrHandMover: {fileID: 0}
-  starterPoint: {fileID: 0}
-  safetyVisualizer: {fileID: 0}
-  webcamScript: {fileID: 0}
+
 --- !u!114 &960532784
 MonoBehaviour:
   m_ObjectHideFlags: 0
